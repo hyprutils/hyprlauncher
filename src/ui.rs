@@ -33,6 +33,7 @@ impl LauncherWindow {
 
         let main_box = GtkBox::new(Orientation::Vertical, 0);
         let search_entry = SearchEntry::new();
+        search_entry.set_placeholder_text(Some("Shift+Return to finish search"));
         let scrolled = ScrolledWindow::new();
         let results_list = ListBox::new();
 
