@@ -36,7 +36,7 @@ impl LauncherWindow {
 
         let focus_controller = gtk4::EventControllerFocus::new();
         focus_controller.connect_enter(clone!(@strong search_entry => move |_| {
-            search_entry.set_placeholder_text(Some("Press RETURN to finish searching"));
+            search_entry.set_placeholder_text(Some("Press enter to finish searching"));
         }));
 
         focus_controller.connect_leave(clone!(@strong search_entry => move |_| {
