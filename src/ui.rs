@@ -177,7 +177,8 @@ impl LauncherWindow {
                 @strong app_data_store => move |_, row| {
                 if let Some(app_data) = get_app_data(row.index() as usize, &app_data_store) {
                     if launch_application(&app_data, &search_entry) {
-                    window.close();}
+                        window.close();
+                    }
                 }
             }));
 
@@ -188,7 +189,8 @@ impl LauncherWindow {
                 if let Some(row) = results_list.selected_row() {
                     if let Some(app_data) = get_app_data(row.index() as usize, &app_data_store) {
                         if launch_application(&app_data, &search_entry) {
-                        window.close();}
+                            window.close();
+                        }
                     }
                 }
             }),
