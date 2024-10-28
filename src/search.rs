@@ -11,7 +11,7 @@ pub struct SearchResult {
 
 pub async fn search_applications(query: &str) -> Vec<SearchResult> {
     let (tx, rx) = oneshot::channel();
-    let query = query.to_string();
+    let query = query.to_lowercase().to_string();
 
     tokio::task::spawn_blocking(move || {
         let cache = APP_CACHE.blocking_read();
