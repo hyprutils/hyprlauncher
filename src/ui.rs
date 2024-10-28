@@ -176,8 +176,8 @@ impl LauncherWindow {
                 @strong self.search_entry as search_entry,
                 @strong app_data_store => move |_, row| {
                 if let Some(app_data) = get_app_data(row.index() as usize, &app_data_store) {
-                    launch_application(&app_data, &search_entry);
-                    window.close();
+                    if launch_application(&app_data, &search_entry) {
+                    window.close();}
                 }
             }));
 
@@ -187,8 +187,8 @@ impl LauncherWindow {
                   @strong app_data_store => move |_| {
                 if let Some(row) = results_list.selected_row() {
                     if let Some(app_data) = get_app_data(row.index() as usize, &app_data_store) {
-                        launch_application(&app_data, &search_entry);
-                        window.close();
+                        if launch_application(&app_data, &search_entry) {
+                        window.close();}
                     }
                 }
             }),
@@ -292,7 +292,7 @@ fn select_previous(list: &ListBox) {
     }
 }
 
-fn launch_application(app: &AppEntry, search_entry: &SearchEntry) {
+fn launch_application(app: &AppEntry, search_entry: &SearchEntry) -> bool {
     match app.entry_type {
         EntryType::Application => {
             let exec = app
@@ -311,6 +311,8 @@ fn launch_application(app: &AppEntry, search_entry: &SearchEntry) {
             glib::spawn_future_local(async move {
                 let _ = Command::new("sh").arg("-c").arg(exec).spawn();
             });
+
+            true
         }
         EntryType::File => {
             if app.icon_name == "folder" {
@@ -320,11 +322,15 @@ fn launch_application(app: &AppEntry, search_entry: &SearchEntry) {
                     format!("{}/", app.path)
                 };
                 search_entry.set_text(&path);
+
+                false
             } else {
                 let exec = app.exec.clone();
                 glib::spawn_future_local(async move {
                     let _ = Command::new("sh").arg("-c").arg(exec).spawn();
                 });
+
+                true
             }
         }
     }
