@@ -10,6 +10,7 @@ pub struct Config {
     pub font_size: i32,
     pub max_results: usize,
     pub theme: Theme,
+    pub search_tooltip: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -31,6 +32,7 @@ impl Default for Config {
                 text_color: String::from("#eceff4"),
                 selection_color: String::from("#5e81ac"),
             },
+            search_tooltip: false,
         }
     }
 }
