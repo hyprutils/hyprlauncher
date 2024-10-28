@@ -34,17 +34,18 @@ impl LauncherWindow {
         let main_box = GtkBox::new(Orientation::Vertical, 0);
         let search_entry = SearchEntry::new();
 
-        if config.search_tooltip {
-            let focus_controller = gtk4::EventControllerFocus::new();
-            focus_controller.connect_enter(clone!(@strong search_entry => move |_| {
-                search_entry.set_placeholder_text(Some("Press enter to finish searching"));
-            }));
-
+        let focus_controller = gtk4::EventControllerFocus::new();
+        if config.search_enter_tooltip {
             focus_controller.connect_leave(clone!(@strong search_entry => move |_| {
                 search_entry.set_placeholder_text(Some("Press / to start searching"));
             }));
-            search_entry.add_controller(focus_controller);
         }
+        if config.search_finish_tooltop {
+            focus_controller.connect_enter(clone!(@strong search_entry => move |_| {
+                search_entry.set_placeholder_text(Some("Press enter to finish searching"));
+            }));
+        }
+        search_entry.add_controller(focus_controller);
 
         let scrolled = ScrolledWindow::new();
         let results_list = ListBox::new();
