@@ -113,34 +113,48 @@ pub async fn search_applications(query: &str) -> Vec<SearchResult> {
             let matcher = SkimMatcherV2::default().smart_case();
             let cache_vec: Vec<_> = cache.values().collect();
 
-            let mut results: Vec<SearchResult> = cache_vec
-                .par_iter()
-                .filter_map(|app| {
-                    matcher
-                        .fuzzy_match(&app.name.to_lowercase(), &query)
-                        .map(|score| {
-                            let heat_score = if app.launch_count > 0 {
-                                (app.launch_count as i64 * 100) + 2000
-                            } else {
-                                0
-                            };
+            let mut seen_names = std::collections::HashSet::new();
+            let mut seen_execs = std::collections::HashSet::new();
+            let mut results: Vec<SearchResult> = Vec::new();
 
-                            let icon_score = if app.icon_name == "application-x-executable" {
-                                0
-                            } else {
-                                1000
-                            };
+            for app in cache_vec.iter() {
+                if let Some(score) = matcher.fuzzy_match(&app.name.to_lowercase(), &query) {
+                    let name_lower = app.name.to_lowercase();
+                    let exec_name = app
+                        .path
+                        .split('/')
+                        .last()
+                        .unwrap_or("")
+                        .split('.')
+                        .next()
+                        .unwrap_or("")
+                        .to_lowercase();
 
-                            SearchResult {
-                                app: (*app).clone(),
-                                score: score + heat_score + icon_score,
-                            }
-                        })
-                })
-                .collect();
+                    if !seen_names.contains(&name_lower) && !seen_execs.contains(&exec_name) {
+                        seen_names.insert(name_lower);
+                        seen_execs.insert(exec_name);
+
+                        let heat_score = if app.launch_count > 0 {
+                            (app.launch_count as i64 * 100) + 2000
+                        } else {
+                            0
+                        };
+
+                        let icon_score = if app.icon_name == "application-x-executable" {
+                            0
+                        } else {
+                            1000
+                        };
+
+                        results.push(SearchResult {
+                            app: (*app).clone(),
+                            score: score + heat_score + icon_score,
+                        });
+                    }
+                }
+            }
 
             results.par_sort_unstable_by(|a, b| b.score.cmp(&a.score));
-            results.dedup_by(|a, b| a.app.name.to_lowercase() == b.app.name.to_lowercase());
             results.truncate(100);
             results
         };
