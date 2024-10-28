@@ -324,6 +324,7 @@ fn launch_application(app: &AppEntry, search_entry: &SearchEntry) -> bool {
                     format!("{}/", app.path)
                 };
                 search_entry.set_text(&path);
+                search_entry.set_position(-1);
 
                 false
             } else {
