@@ -11,7 +11,7 @@ pub struct SearchResult {
 
 pub async fn search_applications(query: &str) -> Vec<SearchResult> {
     let (tx, rx) = oneshot::channel();
-    let query = query.to_lowercase().to_string();
+    let query = query.to_lowercase();
 
     tokio::task::spawn_blocking(move || {
         let cache = APP_CACHE.blocking_read();
@@ -104,7 +104,9 @@ pub async fn search_applications(query: &str) -> Vec<SearchResult> {
                     }
                 })
                 .collect();
+
             results.par_sort_unstable_by(|a, b| b.score.cmp(&a.score));
+            results.dedup_by(|a, b| a.app.name == b.app.name);
             results.truncate(100);
             results
         } else {
@@ -114,28 +116,31 @@ pub async fn search_applications(query: &str) -> Vec<SearchResult> {
             let mut results: Vec<SearchResult> = cache_vec
                 .par_iter()
                 .filter_map(|app| {
-                    matcher.fuzzy_match(&app.name, &query).map(|score| {
-                        let heat_score = if app.launch_count > 0 {
-                            (app.launch_count as i64 * 100) + 2000
-                        } else {
-                            0
-                        };
+                    matcher
+                        .fuzzy_match(&app.name.to_lowercase(), &query)
+                        .map(|score| {
+                            let heat_score = if app.launch_count > 0 {
+                                (app.launch_count as i64 * 100) + 2000
+                            } else {
+                                0
+                            };
 
-                        let icon_score = if app.icon_name == "application-x-executable" {
-                            0
-                        } else {
-                            1000
-                        };
+                            let icon_score = if app.icon_name == "application-x-executable" {
+                                0
+                            } else {
+                                1000
+                            };
 
-                        SearchResult {
-                            app: (*app).clone(),
-                            score: score + heat_score + icon_score,
-                        }
-                    })
+                            SearchResult {
+                                app: (*app).clone(),
+                                score: score + heat_score + icon_score,
+                            }
+                        })
                 })
                 .collect();
 
             results.par_sort_unstable_by(|a, b| b.score.cmp(&a.score));
+            results.dedup_by(|a, b| a.app.name.to_lowercase() == b.app.name.to_lowercase());
             results.truncate(100);
             results
         };
