@@ -70,10 +70,57 @@ pub async fn load_applications() {
         .await
         .unwrap_or_default();
 
+    let mut apps = HashMap::new();
+    let desktop_paths = [
+        "/usr/share/applications",
+        "/usr/local/share/applications",
+        "~/.local/share/applications",
+    ];
+
+    for path in desktop_paths {
+        let expanded_path = shellexpand::tilde(path).to_string();
+        if let Ok(entries) = std::fs::read_dir(expanded_path) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                if let Some(name) = entry.file_name().to_str() {
+                    if name.ends_with(".desktop") {
+                        if let Ok(desktop_entry) = parse_entry(entry.path()) {
+                            if let Some(app_name) =
+                                desktop_entry.section("Desktop Entry").attr("Name")
+                            {
+                                let exec = desktop_entry
+                                    .section("Desktop Entry")
+                                    .attr("Exec")
+                                    .unwrap_or("")
+                                    .to_string();
+                                let icon = desktop_entry
+                                    .section("Desktop Entry")
+                                    .attr("Icon")
+                                    .unwrap_or("application-x-executable")
+                                    .to_string();
+                                let launch_count =
+                                    heatmap.get(app_name).copied().unwrap_or_default();
+
+                                apps.insert(
+                                    app_name.to_string(),
+                                    AppEntry {
+                                        name: app_name.to_string(),
+                                        exec,
+                                        icon_name: icon,
+                                        path: entry.path().to_string_lossy().to_string(),
+                                        launch_count,
+                                        entry_type: EntryType::Application,
+                                    },
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     let path = std::env::var("PATH").unwrap_or_default();
     let path_entries: Vec<_> = path.split(':').collect();
-
-    let mut apps = HashMap::new();
 
     let results: Vec<_> = path_entries
         .par_iter()

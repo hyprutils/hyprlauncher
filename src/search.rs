@@ -84,20 +84,23 @@ pub async fn search_applications(query: &str) -> Vec<SearchResult> {
             let mut results: Vec<_> = cache
                 .values()
                 .par_bridge()
+                .filter(|app| app.path.contains("/applications/") && app.path.ends_with(".desktop"))
                 .map(|app| {
-                    let base_score = if app.launch_count > 0 {
-                        (app.launch_count as i64 * 100) + 1000
+                    let heat_score = if app.launch_count > 0 {
+                        (app.launch_count as i64 * 100) + 2000
                     } else {
                         0
                     };
-                    let image_score = if app.icon_name != "application-x-executable" {
-                        500
-                    } else {
+
+                    let icon_score = if app.icon_name == "application-x-executable" {
                         0
+                    } else {
+                        1000
                     };
+
                     SearchResult {
                         app: app.clone(),
-                        score: base_score + image_score,
+                        score: heat_score + icon_score,
                     }
                 })
                 .collect();
@@ -112,19 +115,21 @@ pub async fn search_applications(query: &str) -> Vec<SearchResult> {
                 .par_iter()
                 .filter_map(|app| {
                     matcher.fuzzy_match(&app.name, &query).map(|score| {
-                        let heat_bonus = if app.launch_count > 0 {
-                            (app.launch_count as i64 * 50) + 500
+                        let heat_score = if app.launch_count > 0 {
+                            (app.launch_count as i64 * 100) + 2000
                         } else {
                             0
                         };
-                        let image_bonus = if app.icon_name != "application-x-executable" {
-                            250
-                        } else {
+
+                        let icon_score = if app.icon_name == "application-x-executable" {
                             0
+                        } else {
+                            1000
                         };
+
                         SearchResult {
                             app: (*app).clone(),
-                            score: score + heat_bonus + image_bonus,
+                            score: score + heat_score + icon_score,
                         }
                     })
                 })
