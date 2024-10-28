@@ -59,18 +59,33 @@ impl Config {
     pub fn load() -> Self {
         let config_path = Self::ensure_config_dir();
         let config_file = config_path.join("config.json");
+        let default_config = Config::default();
 
         if !config_file.exists() {
-            let config = Config::default();
-            if let Ok(contents) = serde_json::to_string_pretty(&config) {
+            if let Ok(contents) = serde_json::to_string_pretty(&default_config) {
                 fs::write(&config_file, contents).unwrap_or_default();
             }
+            return default_config;
         }
 
-        fs::read_to_string(config_file)
+        let existing_config: serde_json::Value = fs::read_to_string(&config_file)
             .ok()
             .and_then(|contents| serde_json::from_str(&contents).ok())
-            .unwrap_or_default()
+            .unwrap_or_else(|| serde_json::json!({}));
+
+        let merged_config = if let Ok(contents) = serde_json::to_string(&default_config) {
+            let default_json: serde_json::Value =
+                serde_json::from_str(&contents).unwrap_or_default();
+            merge_json(existing_config, default_json.clone(), &default_json)
+        } else {
+            existing_config
+        };
+
+        if let Ok(contents) = serde_json::to_string_pretty(&merged_config) {
+            fs::write(&config_file, contents).unwrap_or_default();
+        }
+
+        serde_json::from_value(merged_config).unwrap_or_default()
     }
 
     pub fn load_css() -> String {
@@ -142,4 +157,38 @@ fn get_default_css() -> String {
             opacity: 0.8;
         }",
     )
+}
+
+fn merge_json(
+    existing: serde_json::Value,
+    default: serde_json::Value,
+    schema: &serde_json::Value,
+) -> serde_json::Value {
+    match (existing, default) {
+        (serde_json::Value::Object(mut existing_obj), serde_json::Value::Object(default_obj)) => {
+            let mut result = serde_json::Map::new();
+
+            for (key, schema_val) in schema.as_object().unwrap() {
+                if let Some(existing_val) = existing_obj.remove(key) {
+                    if schema_val.is_object() && existing_val.is_object() {
+                        result.insert(
+                            key.clone(),
+                            merge_json(
+                                existing_val,
+                                default_obj.get(key).cloned().unwrap_or_default(),
+                                schema_val,
+                            ),
+                        );
+                    } else {
+                        result.insert(key.clone(), existing_val);
+                    }
+                } else if let Some(default_val) = default_obj.get(key) {
+                    result.insert(key.clone(), default_val.clone());
+                }
+            }
+
+            serde_json::Value::Object(result)
+        }
+        (_, default) => default,
+    }
 }
