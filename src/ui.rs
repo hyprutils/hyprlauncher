@@ -33,11 +33,10 @@ impl LauncherWindow {
 
         let main_box = GtkBox::new(Orientation::Vertical, 0);
         let search_entry = SearchEntry::new();
-        search_entry.set_placeholder_text(Some("Press / to start searching"));
 
         let focus_controller = gtk4::EventControllerFocus::new();
         focus_controller.connect_enter(clone!(@strong search_entry => move |_| {
-            search_entry.set_placeholder_text(None);
+            search_entry.set_placeholder_text(Some("Press RETURN to finish searching"));
         }));
 
         focus_controller.connect_leave(clone!(@strong search_entry => move |_| {
