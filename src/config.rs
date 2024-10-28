@@ -8,7 +8,6 @@ pub struct Config {
     pub width: i32,
     pub height: i32,
     pub font_size: i32,
-    pub max_results: usize,
     pub theme: Theme,
 }
 
@@ -25,7 +24,6 @@ impl Default for Config {
             width: 600,
             height: 600,
             font_size: 14,
-            max_results: 10,
             theme: Theme {
                 background_color: String::from("#0f0f0f"),
                 text_color: String::from("#eceff4"),

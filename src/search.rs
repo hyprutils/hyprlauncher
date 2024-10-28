@@ -39,6 +39,7 @@ pub async fn search_applications(query: &str) -> Vec<SearchResult> {
                             _ => a.app.name.cmp(&b.app.name),
                         }
                     });
+                    matches.truncate(100);
                     matches
                 } else {
                     Vec::new()
