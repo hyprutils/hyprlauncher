@@ -1,8 +1,7 @@
 changelog:
   categories:
     - title: '🚀 Features'
-      labels:
-        - 'enhancement'
+      label: 'enhancement'
     - title: '🐛 Bug Fixes'
       label: 'bug'
     - title: '📚 Documentation'
