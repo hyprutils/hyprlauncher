@@ -1,6 +1,7 @@
 <div align='center'>
 
-## Hyprlauncher 🚀🦀
+<h2>Hyprlauncher <img src='https://raw.githubusercontent.com/hyprutils/.github/refs/heads/main/hyprutils_transparent.png'width='18' height='18'></h2>
+
 An unofficial GUI for launching applications, built with GTK4 and Rust. 🚀🦀<br>
 
 ![Preview](.github/preview.png)
@@ -43,3 +44,5 @@ paru -S <package>
 - [Vaxry](https://github.com/vaxerski) - Hyprland
 - [rust-gtk](https://github.com/gtk-rs/gtk4-rs) - The GTK4 library
 - [Hyprland](https://github.com/hyprwm/Hyprland) - The window manager
+
+<h6 align='center'>Copyright (C) 2024 HyprUtils<h6>
