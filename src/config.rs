@@ -27,7 +27,7 @@ impl Default for Config {
             theme: Theme {
                 background_color: String::from("#0f0f0f"),
                 text_color: String::from("#eceff4"),
-                selection_color: String::from("#5e81ac"),
+                selection_color: String::from("#424243"),
             },
         }
     }
