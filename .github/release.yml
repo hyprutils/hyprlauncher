@@ -4,11 +4,17 @@ changelog:
       labels:
         - 'enhancement'
     - title: '🐛 Bug Fixes'
-      labels:
-        - 'fix'
-        - 'bug'
+      label: 'bug'
     - title: '📚 Documentation'
       label: 'documentation'
+    - title: '🛠️ Refactoring'
+      label: 'refactor'
+    - title: '🚀 Performance'
+      label: 'performance'
+    - title: '🎨 GUI'
+      label: 'gui'
+    - title: '💻 Backend'
+      label: 'backend'
   exclude:
     labels:
       - 'skip-changelog'
