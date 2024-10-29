@@ -2,8 +2,11 @@
 
 <h2>Hyprlauncher <img src='https://raw.githubusercontent.com/hyprutils/.github/refs/heads/main/hyprutils_transparent.png'width='18' height='18'></h2>
 
+<img src='hyprlauncher.png' width='200' height='200'>
+
 An unofficial GUI for launching applications, built with GTK4 and Rust. 🚀🦀<br>
 
+## Preview
 ![Preview](.github/preview.png)
 
 </div>
