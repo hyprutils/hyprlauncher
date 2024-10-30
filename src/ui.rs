@@ -27,7 +27,7 @@ impl LauncherWindow {
             .default_height(config.height)
             .title("HyprLauncher")
             .decorated(false)
-            .resizable(true)
+            .resizable(false)
             .modal(true)
             .build();
 
