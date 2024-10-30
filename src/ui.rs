@@ -261,18 +261,27 @@ fn create_result_row(app: &AppEntry) -> gtk4::ListBoxRow {
 
     let name_label = Label::new(Some(&app.name));
     name_label.set_halign(gtk4::Align::Start);
+    name_label.set_wrap(true);
+    name_label.set_wrap_mode(gtk4::pango::WrapMode::WordChar);
+    name_label.set_max_width_chars(50);
     name_label.add_css_class("app-name");
     text_box.append(&name_label);
 
     if !app.description.is_empty() {
         let desc_label = Label::new(Some(&app.description));
         desc_label.set_halign(gtk4::Align::Start);
+        desc_label.set_wrap(true);
+        desc_label.set_wrap_mode(gtk4::pango::WrapMode::WordChar);
+        desc_label.set_max_width_chars(50);
         desc_label.add_css_class("app-description");
         text_box.append(&desc_label);
     }
 
     let path_label = Label::new(Some(&app.path));
     path_label.set_halign(gtk4::Align::Start);
+    path_label.set_wrap(true);
+    path_label.set_wrap_mode(gtk4::pango::WrapMode::WordChar);
+    path_label.set_max_width_chars(50);
     path_label.add_css_class("app-path");
     text_box.append(&path_label);
 
