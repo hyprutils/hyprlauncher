@@ -73,7 +73,11 @@ pub async fn load_applications() {
 
     let mut apps = HashMap::new();
     let desktop_paths = std::env::var("XDG_DATA_DIRS")
-        .map(|str| str.split(':').map(|str| format!("{str}/applications")).collect::<Vec<_>>())
+        .map(|str| {
+            str.split(':')
+                .map(|str| format!("{str}/applications"))
+                .collect::<Vec<_>>()
+        })
         .unwrap_or(vec![
             String::from("/usr/share/applications"),
             String::from("/usr/local/share/applications"),
