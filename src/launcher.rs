@@ -72,14 +72,16 @@ pub async fn load_applications() {
         .unwrap_or_default();
 
     let mut apps = HashMap::new();
-    let desktop_paths = [
-        "/usr/share/applications",
-        "/usr/local/share/applications",
-        "~/.local/share/applications",
-    ];
+    let desktop_paths = std::env::var("XDG_DATA_DIRS")
+        .map(|str| str.split(':').map(|str| format!("{str}/applications")).collect::<Vec<_>>())
+        .unwrap_or(vec![
+            String::from("/usr/share/applications"),
+            String::from("/usr/local/share/applications"),
+            String::from("~/.local/share/applications"),
+        ]);
 
     for path in desktop_paths {
-        let expanded_path = shellexpand::tilde(path).to_string();
+        let expanded_path = shellexpand::tilde(&path).to_string();
         if let Ok(entries) = std::fs::read_dir(expanded_path) {
             for entry in entries.filter_map(|e| e.ok()) {
                 if let Some(name) = entry.file_name().to_str() {
