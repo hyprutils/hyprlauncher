@@ -2,6 +2,7 @@
   rustPlatform,
   pkg-config,
   gtk4,
+  gtk4-layer-shell,
   src ? ./.,
 }:
 let
@@ -19,5 +20,6 @@ rustPlatform.buildRustPackage {
   ];
   buildInputs = [
     gtk4
+    gtk4-layer-shell
   ];
 }
