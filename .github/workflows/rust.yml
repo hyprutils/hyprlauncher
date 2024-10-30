@@ -21,30 +21,10 @@ jobs:
     
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y build-essential
-          sudo apt-get install -y \
-            libpango1.0-dev \
-            libcairo2-dev \
-            libatk1.0-dev \
-            libgtk-4-dev \
-            libsoup2.4-dev
-
-      - name: Set up dependencies
-        run: |
-          export SYSTEM_DEPS_PANGO_NO_PKG_CONFIG="true"
-          export SYSTEM_DEPS_PANGO_LIB="pango-1.0"
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
       - name: Build
-        run: |
-          cargo build --verbose
-          cargo build --release --verbose
+        run: nix build
 
   check:
     runs-on: ubuntu-latest
@@ -52,27 +32,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y build-essential
-          sudo apt-get install -y \
-            libpango1.0-dev \
-            libcairo2-dev \
-            libatk1.0-dev \
-            libgtk-4-dev \
-            libsoup2.4-dev
-
-      - name: Set up dependencies
-        run: |
-          export SYSTEM_DEPS_PANGO_NO_PKG_CONFIG="true"
-          export SYSTEM_DEPS_PANGO_LIB="pango-1.0"
-
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
       - name: Run cargo clippy
-        run: |
-          cargo clippy -- -Dwarnings
-          cargo clippy --release -- -Dwarnings
-
+        run: nix develop --command cargo clippy -- -D warnings
       - name: Run cargo fmt
-        run: cargo fmt --all --check
+        run: nix develop --command cargo fmt --all --check
