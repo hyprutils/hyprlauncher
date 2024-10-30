@@ -264,9 +264,16 @@ fn create_result_row(app: &AppEntry) -> gtk4::ListBoxRow {
     name_label.add_css_class("app-name");
     text_box.append(&name_label);
 
+    if !app.description.is_empty() {
+        let desc_label = Label::new(Some(&app.description));
+        desc_label.set_halign(gtk4::Align::Start);
+        desc_label.add_css_class("app-description");
+        text_box.append(&desc_label);
+    }
+
     let path_label = Label::new(Some(&app.path));
     path_label.set_halign(gtk4::Align::Start);
-    path_label.add_css_class("app-description");
+    path_label.add_css_class("app-path");
     text_box.append(&path_label);
 
     box_row.append(&text_box);

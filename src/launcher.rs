@@ -17,6 +17,7 @@ pub struct AppEntry {
     pub exec: String,
     pub icon_name: String,
     pub path: String,
+    pub description: String,
     pub launch_count: u32,
     pub entry_type: EntryType,
 }
@@ -97,6 +98,14 @@ pub async fn load_applications() {
                                     .attr("Icon")
                                     .unwrap_or("application-x-executable")
                                     .to_string();
+                                let description = desktop_entry
+                                    .section("Desktop Entry")
+                                    .attr("Comment")
+                                    .or_else(|| {
+                                        desktop_entry.section("Desktop Entry").attr("GenericName")
+                                    })
+                                    .unwrap_or("")
+                                    .to_string();
                                 let launch_count =
                                     heatmap.get(app_name).copied().unwrap_or_default();
 
@@ -106,6 +115,7 @@ pub async fn load_applications() {
                                         name: app_name.to_string(),
                                         exec,
                                         icon_name: icon,
+                                        description,
                                         path: entry.path().to_string_lossy().to_string(),
                                         launch_count,
                                         entry_type: EntryType::Application,
@@ -152,6 +162,7 @@ pub async fn load_applications() {
                                 name,
                                 exec: path.clone(),
                                 icon_name,
+                                description: String::new(),
                                 path,
                                 launch_count,
                                 entry_type: EntryType::Application,
@@ -250,6 +261,7 @@ pub fn create_file_entry(path: String) -> Option<AppEntry> {
         name,
         exec,
         icon_name: icon_name.to_string(),
+        description: String::new(),
         path,
         launch_count: 0,
         entry_type: EntryType::File,
