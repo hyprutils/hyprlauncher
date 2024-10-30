@@ -1,4 +1,4 @@
-use crate::launcher::{self, AppEntry, APP_CACHE};
+use crate::launcher::{self, AppEntry, EntryType, APP_CACHE};
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
 use rayon::prelude::*;
@@ -22,16 +22,32 @@ pub async fn search_applications(query: &str) -> Vec<SearchResult> {
 
             if expanded_path.ends_with('/') {
                 if let Ok(entries) = std::fs::read_dir(expanded_path.as_ref()) {
-                    let mut matches: Vec<_> = entries
-                        .filter_map(|entry| entry.ok())
-                        .filter_map(|entry| {
-                            launcher::create_file_entry(entry.path().to_string_lossy().to_string())
-                                .map(|entry| SearchResult {
-                                    app: entry,
-                                    score: 1000,
-                                })
-                        })
-                        .collect();
+                    let mut matches: Vec<_> = Vec::new();
+
+                    if let Some(parent) = std::path::Path::new(expanded_path.as_ref()).parent() {
+                        matches.push(SearchResult {
+                            app: AppEntry {
+                                name: String::from(".."),
+                                exec: String::new(),
+                                icon_name: String::from("folder"),
+                                description: String::new(),
+                                path: parent.to_string_lossy().to_string(),
+                                launch_count: 0,
+                                entry_type: EntryType::File,
+                            },
+                            score: 2000,
+                        });
+                    }
+
+                    matches.extend(entries.filter_map(|entry| entry.ok()).filter_map(|entry| {
+                        launcher::create_file_entry(entry.path().to_string_lossy().to_string()).map(
+                            |entry| SearchResult {
+                                app: entry,
+                                score: 1000,
+                            },
+                        )
+                    }));
+
                     matches.sort_by(|a, b| {
                         match (a.app.icon_name == "folder", b.app.icon_name == "folder") {
                             (true, false) => std::cmp::Ordering::Less,
