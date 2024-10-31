@@ -24,7 +24,7 @@ impl Default for Config {
         Self {
             width: 600,
             height: 600,
-            show_descriptions: true,
+            show_descriptions: false,
             show_paths: true,
             theme: Theme {
                 background_color: String::from("#0f0f0f"),
