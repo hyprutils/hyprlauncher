@@ -46,6 +46,6 @@ paru -S <package>
 - [Adam](https://github.com/adamperkowski) - Code improvements, and maintaining the project
 - [Vaxry](https://github.com/vaxerski) - Hyprland
 - [rust-gtk](https://github.com/gtk-rs/gtk4-rs) - The GTK4 library
-- [Hyprland](https://github.com/hyprwm/Hyprland) - The window manager
+- [Hyprland](https://github.com/hyprwm/Hyprland) - The wayland compositor
 
 <h6 align='center'>Copyright (C) 2024 HyprUtils<h6>
