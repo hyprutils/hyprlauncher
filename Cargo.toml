@@ -4,7 +4,7 @@ version = "0.1.2"
 authors = ["Nyx <nnyyxxxx@protonmail.com>", "Adam Perkowski <adas1per@protonmail.com>"]
 license = "GPL-2.0"
 description = "GUI for launching applications, written in blazingly fast Rust!"
-repository = "https://github.com/nnyyxxxx/hyprlauncher.git"
+repository = "https://github.com/hyprutils/hyprlauncher.git"
 readme = "readme.md"
 keywords = [
     "gui",
