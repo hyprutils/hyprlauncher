@@ -160,7 +160,7 @@ pub async fn load_applications() {
 
                         let icon_name = find_desktop_entry(&name)
                             .map(|e| e.icon_name)
-                            .unwrap_or_else(String::new);
+                            .unwrap_or_default();
 
                         (
                             name.clone(),
