@@ -257,7 +257,7 @@ fn create_result_row(app: &AppEntry) -> gtk4::ListBoxRow {
     } else {
         gtk4::Image::new()
     };
-    
+
     icon.set_pixel_size(32);
     icon.set_margin_end(8);
     box_row.append(&icon);
