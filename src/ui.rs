@@ -252,7 +252,12 @@ fn create_result_row(app: &AppEntry) -> gtk4::ListBoxRow {
     box_row.set_margin_top(8);
     box_row.set_margin_bottom(8);
 
-    let icon = gtk4::Image::from_icon_name(&app.icon_name);
+    let icon = if !app.icon_name.is_empty() && app.icon_name != "application-x-executable" {
+        gtk4::Image::from_icon_name(&app.icon_name)
+    } else {
+        gtk4::Image::new()
+    };
+    
     icon.set_pixel_size(32);
     icon.set_margin_end(8);
     box_row.append(&icon);

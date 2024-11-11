@@ -160,7 +160,7 @@ pub async fn load_applications() {
 
                         let icon_name = find_desktop_entry(&name)
                             .map(|e| e.icon_name)
-                            .unwrap_or_else(|| "application-x-executable".to_string());
+                            .unwrap_or_else(String::new);
 
                         (
                             name.clone(),
@@ -203,9 +203,11 @@ fn find_desktop_entry(name: &str) -> Option<DesktopEntry> {
         let desktop_file = format!("{}/{}.desktop", path, name);
         if let Ok(entry) = parse_entry(&desktop_file) {
             if let Some(icon) = entry.section("Desktop Entry").attr("Icon") {
-                return Some(DesktopEntry {
-                    icon_name: icon.to_string(),
-                });
+                if !icon.is_empty() {
+                    return Some(DesktopEntry {
+                        icon_name: icon.to_string(),
+                    });
+                }
             }
         }
     }
