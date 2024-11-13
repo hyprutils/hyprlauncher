@@ -32,14 +32,10 @@ pub static HEATMAP_PATH: &str = "~/.local/share/hyprlauncher/heatmap.json";
 
 pub fn increment_launch_count(app: &AppEntry) {
     let app_name = app.name.clone();
+    let count = app.launch_count + 1;
 
-    tokio::spawn(async move {
-        let mut cache = APP_CACHE.write().await;
-        if let Some(entry) = cache.get_mut(&app_name) {
-            entry.launch_count += 1;
-            let count = entry.launch_count;
-            tokio::task::spawn_blocking(move || save_heatmap(&app_name, count));
-        }
+    std::thread::spawn(move || {
+        save_heatmap(&app_name, count);
     });
 }
 

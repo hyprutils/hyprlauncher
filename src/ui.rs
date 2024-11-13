@@ -330,11 +330,11 @@ fn launch_application(app: &AppEntry, search_entry: &SearchEntry) -> bool {
 
             launcher::increment_launch_count(app);
 
-            glib::spawn_future_local(async move {
-                let _ = Command::new("sh").arg("-c").arg(exec).spawn();
-            });
-
-            true
+            if let Ok(_) = Command::new("sh").arg("-c").arg(&exec).spawn() {
+                true
+            } else {
+                false
+            }
         }
         EntryType::File => {
             if app.icon_name == "folder" {
@@ -347,13 +347,10 @@ fn launch_application(app: &AppEntry, search_entry: &SearchEntry) -> bool {
                 search_entry.set_position(-1);
 
                 false
-            } else {
-                let exec = app.exec.clone();
-                glib::spawn_future_local(async move {
-                    let _ = Command::new("sh").arg("-c").arg(exec).spawn();
-                });
-
+            } else if let Ok(_) = Command::new("sh").arg("-c").arg(&app.exec).spawn() {
                 true
+            } else {
+                false
             }
         }
     }
