@@ -330,11 +330,7 @@ fn launch_application(app: &AppEntry, search_entry: &SearchEntry) -> bool {
 
             launcher::increment_launch_count(app);
 
-            if let Ok(_) = Command::new("sh").arg("-c").arg(&exec).spawn() {
-                true
-            } else {
-                false
-            }
+            Command::new("sh").arg("-c").arg(&exec).spawn().is_ok()
         }
         EntryType::File => {
             if app.icon_name == "folder" {
@@ -347,10 +343,8 @@ fn launch_application(app: &AppEntry, search_entry: &SearchEntry) -> bool {
                 search_entry.set_position(-1);
 
                 false
-            } else if let Ok(_) = Command::new("sh").arg("-c").arg(&app.exec).spawn() {
-                true
             } else {
-                false
+                Command::new("sh").arg("-c").arg(&app.exec).spawn().is_ok()
             }
         }
     }
