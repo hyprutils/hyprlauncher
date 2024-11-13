@@ -10,16 +10,18 @@ use gtk4::{Box as GtkBox, CssProvider, Orientation, STYLE_PROVIDER_PRIORITY_APPL
 use std::cell::RefCell;
 use std::process::Command;
 use std::rc::Rc;
+use tokio::runtime::Handle;
 
 pub struct LauncherWindow {
     window: ApplicationWindow,
     search_entry: SearchEntry,
     results_list: ListBox,
     app_data_store: Rc<RefCell<Vec<AppEntry>>>,
+    rt: Handle,
 }
 
 impl LauncherWindow {
-    pub fn new(app: &Application) -> Self {
+    pub fn new(app: &Application, rt: Handle) -> Self {
         let config = Config::load();
         let window = ApplicationWindow::builder()
             .application(app)
@@ -72,22 +74,36 @@ impl LauncherWindow {
             search_entry,
             results_list,
             app_data_store: Rc::new(RefCell::new(Vec::new())),
+            rt,
         };
 
         launcher.setup_signals();
-        launcher.load_applications();
+
+        let results_list = launcher.results_list.clone();
+        let app_data_store = launcher.app_data_store.clone();
+        let rt = launcher.rt.clone();
+
+        glib::spawn_future_local(
+            clone!(@strong results_list, @strong app_data_store => async move {
+                let results = rt.block_on(search::search_applications(""));
+                update_results_list(&results_list, results, &app_data_store);
+            }),
+        );
+
         launcher
     }
 
     fn setup_signals(&self) {
         let results_list = self.results_list.clone();
         let app_data_store = self.app_data_store.clone();
+        let rt = self.rt.clone();
 
         self.search_entry.connect_changed(
             clone!(@strong results_list, @strong app_data_store => move |entry| {
                 let query = entry.text().to_string();
+                let rt = rt.clone();
                 glib::spawn_future_local(clone!(@strong results_list, @strong app_data_store => async move {
-                    let results = search::search_applications(&query).await;
+                    let results = rt.block_on(search::search_applications(&query));
                     update_results_list(&results_list, results, &app_data_store);
                 }));
             }),
@@ -176,19 +192,6 @@ impl LauncherWindow {
                         }
                     }
                 }
-            }),
-        );
-    }
-
-    fn load_applications(&self) {
-        let results_list = self.results_list.clone();
-        let app_data_store = self.app_data_store.clone();
-
-        glib::spawn_future_local(
-            clone!(@strong results_list, @strong app_data_store => async move {
-                launcher::load_applications().await;
-                let results = search::search_applications("").await;
-                update_results_list(&results_list, results, &app_data_store);
             }),
         );
     }

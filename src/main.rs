@@ -6,8 +6,7 @@ mod ui;
 
 use app::App;
 
-#[tokio::main]
-async fn main() {
+fn main() {
     let app = App::new();
     app.run();
 }
