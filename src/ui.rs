@@ -82,31 +82,14 @@ impl LauncherWindow {
     fn setup_signals(&self) {
         let results_list = self.results_list.clone();
         let app_data_store = self.app_data_store.clone();
-        let search_counter = Rc::new(RefCell::new(0u32));
 
         self.search_entry.connect_changed(
-            clone!(@strong results_list, @strong app_data_store, @strong search_counter => move |entry| {
-                let current_counter = {
-                    let mut counter = search_counter.borrow_mut();
-                    *counter = counter.wrapping_add(1);
-                    *counter
-                };
-
+            clone!(@strong results_list, @strong app_data_store => move |entry| {
                 let query = entry.text().to_string();
-                glib::timeout_add_local(std::time::Duration::from_millis(150),
-                    clone!(@strong results_list, @strong app_data_store, @strong search_counter => move || {
-                        if current_counter != *search_counter.borrow() {
-                            return glib::ControlFlow::Break;
-                        }
-
-                        let query = query.clone();
-                        glib::spawn_future_local(clone!(@strong results_list, @strong app_data_store => async move {
-                            let results = search::search_applications(&query).await;
-                            update_results_list(&results_list, results, &app_data_store);
-                        }));
-                        glib::ControlFlow::Break
-                    }),
-                );
+                glib::spawn_future_local(clone!(@strong results_list, @strong app_data_store => async move {
+                    let results = search::search_applications(&query).await;
+                    update_results_list(&results_list, results, &app_data_store);
+                }));
             }),
         );
 
