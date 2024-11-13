@@ -221,6 +221,8 @@ fn update_results_list(
     if results.is_empty() {
         let empty_row = gtk4::ListBoxRow::new();
         empty_row.set_visible(true);
+        empty_row.set_selectable(false);
+        empty_row.add_css_class("invisible-row");
         let label = Label::new(Some(""));
         empty_row.set_child(Some(&label));
         list.append(&empty_row);
