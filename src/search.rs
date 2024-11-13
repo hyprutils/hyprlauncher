@@ -134,38 +134,42 @@ pub async fn search_applications(query: &str) -> Vec<SearchResult> {
             let mut results: Vec<SearchResult> = Vec::new();
 
             for app in cache_vec.iter() {
-                if let Some(score) = matcher.fuzzy_match(&app.name.to_lowercase(), &query) {
-                    let name_lower = app.name.to_lowercase();
-                    let exec_name = app
-                        .path
-                        .split('/')
-                        .last()
-                        .unwrap_or("")
-                        .split('.')
-                        .next()
-                        .unwrap_or("")
-                        .to_lowercase();
+                if app.path.contains("/applications/")
+                    || (app.name.to_lowercase() == query && !app.path.contains("/applications/"))
+                {
+                    if let Some(score) = matcher.fuzzy_match(&app.name.to_lowercase(), &query) {
+                        let name_lower = app.name.to_lowercase();
+                        let exec_name = app
+                            .path
+                            .split('/')
+                            .last()
+                            .unwrap_or("")
+                            .split('.')
+                            .next()
+                            .unwrap_or("")
+                            .to_lowercase();
 
-                    if !seen_names.contains(&name_lower) && !seen_execs.contains(&exec_name) {
-                        seen_names.insert(name_lower);
-                        seen_execs.insert(exec_name);
+                        if !seen_names.contains(&name_lower) && !seen_execs.contains(&exec_name) {
+                            seen_names.insert(name_lower);
+                            seen_execs.insert(exec_name);
 
-                        let heat_score = if app.launch_count > 0 {
-                            (app.launch_count as i64 * 100) + 2000
-                        } else {
-                            0
-                        };
+                            let heat_score = if app.launch_count > 0 {
+                                (app.launch_count as i64 * 100) + 2000
+                            } else {
+                                0
+                            };
 
-                        let icon_score = if app.icon_name == "application-x-executable" {
-                            0
-                        } else {
-                            1000
-                        };
+                            let icon_score = if app.icon_name == "application-x-executable" {
+                                0
+                            } else {
+                                1000
+                            };
 
-                        results.push(SearchResult {
-                            app: (*app).clone(),
-                            score: score + heat_score + icon_score,
-                        });
+                            results.push(SearchResult {
+                                app: (*app).clone(),
+                                score: score + heat_score + icon_score,
+                            });
+                        }
                     }
                 }
             }

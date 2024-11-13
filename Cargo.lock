@@ -590,7 +590,6 @@ dependencies = [
  "freedesktop_entry_parser",
  "futures",
  "fuzzy-matcher",
- "gio",
  "glib",
  "gtk4",
  "once_cell",
