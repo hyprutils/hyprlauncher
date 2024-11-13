@@ -218,14 +218,20 @@ fn update_results_list(
     let mut store = store.borrow_mut();
     store.clear();
 
-    for result in results {
-        store.push(result.app.clone());
-        let row = create_result_row(&result.app);
-        list.append(&row);
-    }
+    if results.is_empty() {
+        let empty_row = gtk4::ListBoxRow::new();
+        empty_row.set_visible(false);
+        list.append(&empty_row);
+    } else {
+        for result in results {
+            store.push(result.app.clone());
+            let row = create_result_row(&result.app);
+            list.append(&row);
+        }
 
-    if let Some(first_row) = list.row_at_index(0) {
-        list.select_row(Some(&first_row));
+        if let Some(first_row) = list.row_at_index(0) {
+            list.select_row(Some(&first_row));
+        }
     }
 }
 
