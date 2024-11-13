@@ -220,7 +220,9 @@ fn update_results_list(
 
     if results.is_empty() {
         let empty_row = gtk4::ListBoxRow::new();
-        empty_row.set_visible(false);
+        empty_row.set_visible(true);
+        let label = Label::new(Some(""));
+        empty_row.set_child(Some(&label));
         list.append(&empty_row);
     } else {
         for result in results {
