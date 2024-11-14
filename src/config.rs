@@ -20,6 +20,89 @@ impl Default for Corners {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Colors {
+    pub window_bg: String,
+    pub search_bg: String,
+    pub search_bg_focused: String,
+    pub item_bg: String,
+    pub item_bg_hover: String,
+    pub item_bg_selected: String,
+    pub search_text: String,
+    pub search_caret: String,
+    pub item_name: String,
+    pub item_description: String,
+    pub item_path: String,
+}
+
+impl Default for Colors {
+    fn default() -> Self {
+        Self {
+            window_bg: String::from("#0f0f0f"),
+            search_bg: String::from("#1f1f1f"),
+            search_bg_focused: String::from("#282828"),
+            item_bg: String::from("#0f0f0f"),
+            item_bg_hover: String::from("#181818"),
+            item_bg_selected: String::from("#1f1f1f"),
+            search_text: String::from("#e0e0e0"),
+            search_caret: String::from("#808080"),
+            item_name: String::from("#ffffff"),
+            item_description: String::from("#a0a0a0"),
+            item_path: String::from("#808080"),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Spacing {
+    pub search_margin: i32,
+    pub search_padding: i32,
+    pub item_margin: i32,
+    pub item_padding: i32,
+}
+
+impl Default for Spacing {
+    fn default() -> Self {
+        Self {
+            search_margin: 12,
+            search_padding: 12,
+            item_margin: 6,
+            item_padding: 4,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Typography {
+    pub search_font_size: i32,
+    pub item_name_size: i32,
+    pub item_description_size: i32,
+    pub item_path_size: i32,
+    pub item_path_font_family: String,
+}
+
+impl Default for Typography {
+    fn default() -> Self {
+        Self {
+            search_font_size: 16,
+            item_name_size: 14,
+            item_description_size: 12,
+            item_path_size: 12,
+            item_path_font_family: String::from("monospace"),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default)]
+pub struct Theme {
+    pub colors: Colors,
+    pub corners: Corners,
+    pub spacing: Spacing,
+    pub typography: Typography,
+}
+
+
 #[allow(non_camel_case_types)]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
@@ -35,7 +118,7 @@ pub struct Config {
     pub margin_bottom: i32,
     pub margin_left: i32,
     pub margin_right: i32,
-    pub corners: Corners,
+    pub theme: Theme,
 }
 
 #[allow(non_camel_case_types)]
@@ -67,7 +150,7 @@ impl Default for Config {
             margin_bottom: 0,
             margin_left: 0,
             margin_right: 0,
-            corners: Corners::default(),
+            theme: Theme::default(),
         }
     }
 }
@@ -87,7 +170,7 @@ impl Config {
 
         let css_path = config_path.join("style.css");
         if !css_path.exists() {
-            fs::write(&css_path, get_default_css()).unwrap_or_default();
+            fs::write(&css_path, Self::get_default_css()).unwrap_or_default();
         }
 
         config_path
@@ -128,75 +211,124 @@ impl Config {
     pub fn load_css() -> String {
         let config_path = Self::ensure_config_dir();
         let css_path = config_path.join("style.css");
-        fs::read_to_string(css_path).unwrap_or_else(|_| get_default_css())
-    }
-}
 
-fn get_default_css() -> String {
-    let config = Config::default();
-    format!(
-        "window {{ 
-            background-color: #0f0f0f;
-            border-radius: {}px;
-        }}
-        
-        list {{ 
-            background: #0f0f0f;
-        }}
-        
-        list row {{ 
-            padding: 4px;
-            margin: 2px 6px;
-            border-radius: {}px;
-            background: #0f0f0f;
-            transition: all 200ms ease;
-        }}
-        
-        list row:selected {{ 
-            background-color: #1f1f1f;
-        }}
-        
-        list row:hover:not(:selected) {{
-            background-color: #181818;
-        }}
-        
-        entry {{
-            margin: 12px;
-            margin-bottom: 8px;
-            padding: 12px;
-            border-radius: {}px;
-            background-color: #1f1f1f;
-            color: #e0e0e0;
-            caret-color: #808080;
-            font-size: 16px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-        }}
-        
-        entry:focus {{
-            background-color: #282828;
-        }}
-        
-        .app-name {{
-            color: #ffffff;
-            font-size: 14px;
-            font-weight: bold;
-            margin-right: 8px;
-        }}
-        
-        .app-description {{
-            color: #a0a0a0;
-            font-size: 12px;
-            margin-right: 8px;
-        }}
-        
-        .app-path {{
-            color: #808080;
-            font-size: 12px;
-            font-family: monospace;
-            opacity: 0.8;
-        }}",
-        config.corners.window, config.corners.list_item, config.corners.search,
-    )
+        let css = Self::generate_css(&Config::load());
+
+        fs::write(&css_path, &css).unwrap_or_default();
+
+        css
+    }
+
+    fn generate_css(config: &Config) -> String {
+        let theme = &config.theme;
+
+        format!(
+            "/*
+ * ███████╗████████╗ ██████╗ ██████╗     ██╗
+ * ██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗    ██║
+ * ███████╗   ██║   ██║   ██║██████╔╝    ██║
+ * ╚════██║   ██║   ██║   ██║██╔═══╝     ╚═╝
+ * ███████║   ██║   ╚██████╔╝██║         ██╗
+ * ╚══════╝   ╚═╝    ╚═════╝ ╚═╝         ╚═╝
+ *
+ * DO NOT EDIT THIS FILE DIRECTLY!
+ * 
+ * This file is automatically generated from your config.json theme settings.
+ * Any direct changes to this file will be overwritten.
+ * 
+ * To customize the appearance, edit the theme section in:
+ * ~/.config/hyprlauncher/config.json
+ */
+
+window {{ 
+    background-color: {};
+    border-radius: {}px;
+}}
+
+list {{ 
+    background: {};
+}}
+
+list row {{ 
+    padding: {}px;
+    margin: {}px;
+    border-radius: {}px;
+    background: {};
+    transition: all 200ms ease;
+}}
+
+list row:selected {{ 
+    background-color: {};
+}}
+
+list row:hover:not(:selected) {{
+    background-color: {};
+}}
+
+entry {{
+    margin: {}px;
+    padding: {}px;
+    border-radius: {}px;
+    background-color: {};
+    color: {};
+    caret-color: {};
+    font-size: {}px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}}
+
+entry:focus {{
+    background-color: {};
+}}
+
+.app-name {{
+    color: {};
+    font-size: {}px;
+    font-weight: bold;
+    margin-right: 8px;
+}}
+
+.app-description {{
+    color: {};
+    font-size: {}px;
+    margin-right: 8px;
+}}
+
+.app-path {{
+    color: {};
+    font-size: {}px;
+    font-family: {};
+    opacity: 0.8;
+}}",
+            theme.colors.window_bg,
+            theme.corners.window,
+            theme.colors.window_bg,
+            theme.spacing.item_padding,
+            theme.spacing.item_margin,
+            theme.corners.list_item,
+            theme.colors.item_bg,
+            theme.colors.item_bg_selected,
+            theme.colors.item_bg_hover,
+            theme.spacing.search_margin,
+            theme.spacing.search_padding,
+            theme.corners.search,
+            theme.colors.search_bg,
+            theme.colors.search_text,
+            theme.colors.search_caret,
+            theme.typography.search_font_size,
+            theme.colors.search_bg_focused,
+            theme.colors.item_name,
+            theme.typography.item_name_size,
+            theme.colors.item_description,
+            theme.typography.item_description_size,
+            theme.colors.item_path,
+            theme.typography.item_path_size,
+            theme.typography.item_path_font_family,
+        )
+    }
+
+    fn get_default_css() -> String {
+        Self::generate_css(&Config::default())
+    }
 }
 
 fn merge_json(
