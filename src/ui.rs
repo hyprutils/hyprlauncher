@@ -24,8 +24,11 @@ pub struct LauncherWindow {
 #[allow(non_camel_case_types)]
 impl LauncherWindow {
     pub fn new(app: &Application, rt: Handle) -> Self {
-        println!("Creating launcher window (0.000ms)");
         let window_start = std::time::Instant::now();
+        println!(
+            "Creating launcher window ({:.3}ms)",
+            window_start.elapsed().as_secs_f64() * 1000.0
+        );
 
         let config = Config::load();
         let window = ApplicationWindow::builder()
@@ -57,6 +60,7 @@ impl LauncherWindow {
         main_box.append(&scrolled);
         window.set_child(Some(&main_box));
 
+        let css_start = std::time::Instant::now();
         let css_provider = CssProvider::new();
         css_provider.load_from_data(&Config::load_css());
         if let Some(native) = window.native() {
@@ -66,6 +70,10 @@ impl LauncherWindow {
                 STYLE_PROVIDER_PRIORITY_APPLICATION,
             );
         }
+        println!(
+            "CSS loading and application ({:.3}ms)",
+            css_start.elapsed().as_secs_f64() * 1000.0
+        );
 
         let launcher = Self {
             window,
@@ -81,33 +89,31 @@ impl LauncherWindow {
         let app_data_store = launcher.app_data_store.clone();
         let rt = launcher.rt.clone();
 
+        let search_start = std::time::Instant::now();
         glib::spawn_future_local(async move {
             let results = rt.block_on(search::search_applications(""));
             update_results_list(&results_list, results, &app_data_store);
         });
-
         println!(
-            "After window creation ({:.3}ms)",
-            window_start.elapsed().as_secs_f64() * 1000.0
+            "Initial search population ({:.3}ms)",
+            search_start.elapsed().as_secs_f64() * 1000.0
         );
 
         launcher
     }
 
     pub fn present(&self) {
-        println!("Presenting launcher window (0.000ms)");
         let present_start = std::time::Instant::now();
+        println!(
+            "Presenting launcher window ({:.3}ms)",
+            present_start.elapsed().as_secs_f64() * 1000.0
+        );
 
         self.window.present();
 
         if Config::load().window.show_search {
             self.search_entry.grab_focus();
         }
-
-        println!(
-            "After window present ({:.3}ms)",
-            present_start.elapsed().as_secs_f64() * 1000.0
-        );
     }
 
     fn setup_window_anchoring(window: &ApplicationWindow, config: &Config) {
