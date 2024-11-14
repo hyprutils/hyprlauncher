@@ -30,6 +30,13 @@ impl LauncherWindow {
             window_start.elapsed().as_secs_f64() * 1000.0
         );
 
+        let search_start = std::time::Instant::now();
+        let initial_results = rt.block_on(async { search::search_applications("").await });
+        println!(
+            "Initial search population ({:.3}ms)",
+            search_start.elapsed().as_secs_f64() * 1000.0
+        );
+
         let config = Config::load();
         let window = ApplicationWindow::builder()
             .application(app)
@@ -75,30 +82,19 @@ impl LauncherWindow {
             css_start.elapsed().as_secs_f64() * 1000.0
         );
 
+        let app_data_store = Rc::new(RefCell::new(Vec::with_capacity(50)));
+
+        update_results_list(&results_list, initial_results, &app_data_store);
+
         let launcher = Self {
             window,
             search_entry,
             results_list,
-            app_data_store: Rc::new(RefCell::new(Vec::with_capacity(50))),
-            rt,
+            app_data_store,
+            rt: rt.clone(),
         };
 
         launcher.setup_signals();
-
-        let results_list = launcher.results_list.clone();
-        let app_data_store = launcher.app_data_store.clone();
-        let rt = launcher.rt.clone();
-
-        let search_start = std::time::Instant::now();
-        glib::spawn_future_local(async move {
-            let results = rt.block_on(search::search_applications(""));
-            update_results_list(&results_list, results, &app_data_store);
-        });
-        println!(
-            "Initial search population ({:.3}ms)",
-            search_start.elapsed().as_secs_f64() * 1000.0
-        );
-
         launcher
     }
 
@@ -161,16 +157,19 @@ impl LauncherWindow {
 
             let results_list_for_search = self.results_list.clone();
             let app_data_store_for_search = self.app_data_store.clone();
-            let rt_for_search = self.rt.clone();
+            let rt_handle = self.rt.clone();
 
             self.search_entry.connect_changed(move |entry| {
                 let query = entry.text().to_string();
                 let results_list = results_list_for_search.clone();
                 let app_data_store = app_data_store_for_search.clone();
-                let rt = rt_for_search.clone();
+                let rt_handle = rt_handle.clone();
 
-                glib::spawn_future_local(async move {
-                    let results = rt.block_on(search::search_applications(&query));
+                glib::MainContext::default().spawn_local(async move {
+                    let results = rt_handle
+                        .spawn(async move { search::search_applications(&query).await })
+                        .await
+                        .unwrap_or_default();
                     update_results_list(&results_list, results, &app_data_store);
                 });
             });

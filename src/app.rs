@@ -2,17 +2,25 @@ use crate::launcher;
 use crate::ui::LauncherWindow;
 use gtk4::prelude::*;
 use gtk4::Application;
-use std::sync::Arc;
 use tokio::runtime::Runtime;
 
 pub struct App {
     app: Application,
-    rt: Arc<Runtime>,
+    rt: Runtime,
 }
 
 impl App {
     pub fn new() -> Self {
-        let rt = Arc::new(Runtime::new().unwrap());
+        let rt = Runtime::new().expect("Failed to create Tokio runtime");
+
+        let load_start = std::time::Instant::now();
+        rt.block_on(async {
+            launcher::load_applications().await;
+        });
+        println!(
+            "Loading applications ({:.3}ms)",
+            load_start.elapsed().as_secs_f64() * 1000.0
+        );
 
         let pre_gtk = std::time::Instant::now();
         println!("Before GTK app creation");
@@ -26,21 +34,14 @@ impl App {
             pre_gtk.elapsed().as_secs_f64() * 1000.0
         );
 
-        let load_start = std::time::Instant::now();
-        rt.block_on(launcher::load_applications());
-        println!(
-            "Loading applications ({:.3}ms)",
-            load_start.elapsed().as_secs_f64() * 1000.0
-        );
-
         Self { app, rt }
     }
 
     pub fn run(&self) {
         let grand_total = std::time::Instant::now();
-
         let pre_connect = std::time::Instant::now();
-        let rt = self.rt.handle().clone();
+        let rt_handle = self.rt.handle().clone();
+
         self.app.connect_activate(move |app| {
             println!(
                 "Inside activate callback ({:.3}ms from start)",
@@ -48,7 +49,7 @@ impl App {
             );
 
             let window_start = std::time::Instant::now();
-            let window = LauncherWindow::new(app, rt.clone());
+            let window = LauncherWindow::new(app, rt_handle.clone());
             println!(
                 "After window creation ({:.3}ms)",
                 window_start.elapsed().as_secs_f64() * 1000.0
