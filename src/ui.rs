@@ -62,7 +62,7 @@ impl LauncherWindow {
 
         let css_start = std::time::Instant::now();
         let css_provider = CssProvider::new();
-        css_provider.load_from_data(&Config::load_css());
+        css_provider.load_from_data(&config.get_css());
         if let Some(native) = window.native() {
             gtk4::style_context_add_provider_for_display(
                 &native.display(),
