@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::{Config, WindowAnchor};
 use crate::launcher::{self, AppEntry, EntryType};
 use crate::search;
 use gtk4::gdk::Key;
@@ -7,6 +7,7 @@ use gtk4::prelude::*;
 use gtk4::ListBoxRow;
 use gtk4::{Application, ApplicationWindow, Label, ListBox, ScrolledWindow, SearchEntry};
 use gtk4::{Box as GtkBox, CssProvider, Orientation, STYLE_PROVIDER_PRIORITY_APPLICATION};
+use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 use std::cell::RefCell;
 use std::process::Command;
 use std::rc::Rc;
@@ -33,10 +34,61 @@ impl LauncherWindow {
             .default_width(config.width)
             .default_height(config.height)
             .title("HyprLauncher")
-            .decorated(false)
-            .resizable(false)
-            .modal(true)
             .build();
+
+        window.init_layer_shell();
+        window.set_layer(Layer::Top);
+        window.set_keyboard_mode(KeyboardMode::Exclusive);
+
+        match config.anchor {
+            WindowAnchor::center => {
+                window.set_anchor(Edge::Left, false);
+                window.set_anchor(Edge::Right, false);
+                window.set_anchor(Edge::Top, false);
+                window.set_anchor(Edge::Bottom, false);
+            }
+            WindowAnchor::top => {
+                window.set_anchor(Edge::Top, true);
+                window.set_anchor(Edge::Left, false);
+                window.set_anchor(Edge::Right, false);
+            }
+            WindowAnchor::bottom => {
+                window.set_anchor(Edge::Bottom, true);
+                window.set_anchor(Edge::Left, false);
+                window.set_anchor(Edge::Right, false);
+            }
+            WindowAnchor::left => {
+                window.set_anchor(Edge::Left, true);
+                window.set_anchor(Edge::Top, false);
+                window.set_anchor(Edge::Bottom, false);
+            }
+            WindowAnchor::right => {
+                window.set_anchor(Edge::Right, true);
+                window.set_anchor(Edge::Top, false);
+                window.set_anchor(Edge::Bottom, false);
+            }
+            WindowAnchor::top_left => {
+                window.set_anchor(Edge::Top, true);
+                window.set_anchor(Edge::Left, true);
+            }
+            WindowAnchor::top_right => {
+                window.set_anchor(Edge::Top, true);
+                window.set_anchor(Edge::Right, true);
+            }
+            WindowAnchor::bottom_left => {
+                window.set_anchor(Edge::Bottom, true);
+                window.set_anchor(Edge::Left, true);
+            }
+            WindowAnchor::bottom_right => {
+                window.set_anchor(Edge::Bottom, true);
+                window.set_anchor(Edge::Right, true);
+            }
+        }
+
+        window.set_margin(Edge::Top, config.margin_top);
+        window.set_margin(Edge::Bottom, config.margin_bottom);
+        window.set_margin(Edge::Left, config.margin_left);
+        window.set_margin(Edge::Right, config.margin_right);
 
         let main_box = GtkBox::new(Orientation::Vertical, 0);
         let search_entry = SearchEntry::new();
