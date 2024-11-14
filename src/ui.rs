@@ -120,6 +120,10 @@ impl LauncherWindow {
         scrolled.set_vexpand(true);
         results_list.set_selection_mode(gtk4::SelectionMode::Single);
 
+        if !config.window.show_scrollbar {
+            scrolled.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::External);
+        }
+
         scrolled.set_child(Some(&results_list));
         main_box.append(&scrolled);
         window.set_child(Some(&main_box));

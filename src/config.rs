@@ -139,6 +139,7 @@ pub struct Window {
     pub show_border: bool,
     pub border_width: i32,
     pub border_color: String,
+    pub show_scrollbar: bool,
 }
 
 impl Default for Window {
@@ -159,6 +160,7 @@ impl Default for Window {
             show_border: true,
             border_width: 2,
             border_color: String::from("#333333"),
+            show_scrollbar: true,
         }
     }
 }
@@ -230,6 +232,16 @@ impl Config {
     fn generate_css(config: &Config) -> String {
         let theme = &config.theme;
         let window = &config.window;
+
+        let scrollbar_style = if window.show_scrollbar {
+            String::new()
+        } else {
+            String::from("
+scrollbar {
+    opacity: 0;
+    -gtk-secondary-caret-color: transparent;
+}")
+        };
 
         format!(
             "/*
@@ -308,7 +320,29 @@ entry:focus {{
     font-size: {}px;
     font-family: {};
     opacity: 0.8;
-}}",
+}}
+
+scrollbar {{
+    background-color: transparent;
+    border: none;
+}}
+
+scrollbar slider {{
+    min-width: 6px;
+    min-height: 6px;
+    border-radius: 3px;
+    background-color: alpha(#808080, 0.7);
+}}
+
+scrollbar.vertical slider {{
+    min-width: 6px;
+}}
+
+scrollbar.horizontal slider {{
+    min-height: 6px;
+}}
+
+{}",
             theme.colors.window_bg,
             theme.corners.window,
             if window.show_border {
@@ -341,6 +375,7 @@ entry:focus {{
             theme.colors.item_path,
             theme.typography.item_path_size,
             theme.typography.item_path_font_family,
+            scrollbar_style,
         )
     }
 
