@@ -136,6 +136,9 @@ pub struct Window {
     pub show_icons: bool,
     pub show_search: bool,
     pub vim_keys: bool,
+    pub show_border: bool,
+    pub border_width: i32,
+    pub border_color: String,
 }
 
 impl Default for Window {
@@ -153,6 +156,9 @@ impl Default for Window {
             margin_bottom: 0,
             margin_left: 0,
             margin_right: 0,
+            show_border: true,
+            border_width: 2,
+            border_color: String::from("#333333"),
         }
     }
 }
@@ -223,6 +229,7 @@ impl Config {
 
     fn generate_css(config: &Config) -> String {
         let theme = &config.theme;
+        let window = &config.window;
 
         format!(
             "/*
@@ -245,6 +252,7 @@ impl Config {
 window {{ 
     background-color: {};
     border-radius: {}px;
+    {}
 }}
 
 list {{ 
@@ -303,6 +311,14 @@ entry:focus {{
 }}",
             theme.colors.window_bg,
             theme.corners.window,
+            if window.show_border {
+                format!(
+                    "border: {}px solid {};",
+                    window.border_width, window.border_color
+                )
+            } else {
+                String::from("border: none;")
+            },
             theme.colors.window_bg,
             theme.spacing.item_padding,
             theme.spacing.item_margin,
