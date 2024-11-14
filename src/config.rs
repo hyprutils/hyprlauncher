@@ -1,6 +1,5 @@
-use dirs::config_dir;
 use serde::{Deserialize, Serialize};
-use std::{fs, path::PathBuf};
+use std::{env, fs, path::PathBuf};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Corners {
@@ -166,20 +165,31 @@ impl Default for Window {
 
 impl Config {
     fn ensure_config_dir() -> PathBuf {
-        let config_path = config_dir()
-            .map(|mut p| {
-                p.push("hyprlauncher");
-                p
-            })
-            .unwrap_or_else(|| PathBuf::from("~/.config/hyprlauncher"));
+        let xdg_config_dirs =
+            env::var("XDG_CONFIG_DIRS").unwrap_or_else(|_| String::from("/etc/xdg"));
 
-        if !config_path.exists() {
-            fs::create_dir_all(&config_path).unwrap_or_default();
+        let config_dirs: Vec<PathBuf> = xdg_config_dirs
+            .split(':')
+            .map(|dir| PathBuf::from(dir).join("hyprlauncher"))
+            .collect();
+
+        for dir in config_dirs {
+            if dir.exists() {
+                return dir;
+            }
         }
 
-        config_path
-    }
+        let default_config_path = dirs::home_dir()
+            .unwrap_or_else(|| PathBuf::from("~"))
+            .join(".config")
+            .join("hyprlauncher");
 
+        if !default_config_path.exists() {
+            fs::create_dir_all(&default_config_path).unwrap_or_default();
+        }
+
+        default_config_path
+    }
     pub fn load() -> Self {
         let config_path = Self::ensure_config_dir();
         let config_file = config_path.join("config.json");
@@ -223,22 +233,22 @@ impl Config {
         };
 
         format!(
-            "window {{ 
+            "window {{
                 background-color: {};
                 border-radius: {}px;
                 {}
             }}
-            list {{ 
+            list {{
                 background: {};
             }}
-            list row {{ 
+            list row {{
                 padding: {}px;
                 margin: {}px;
                 border-radius: {}px;
                 background: {};
                 transition: all 200ms ease;
             }}
-            list row:selected {{ 
+            list row:selected {{
                 background-color: {};
             }}
             list row:hover:not(:selected) {{
