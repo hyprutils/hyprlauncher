@@ -20,7 +20,7 @@ impl Default for Config {
             width: 600,
             height: 600,
             show_descriptions: false,
-            show_paths: true,
+            show_paths: false,
             show_icons: true,
             vim_keys: true,
             show_search: true,
