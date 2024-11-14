@@ -1,8 +1,11 @@
 use crate::config::{Config, WindowAnchor};
 use crate::launcher::{self, AppEntry, EntryType};
 use crate::search;
+use fuzzy_matcher::skim::SkimMatcherV2;
+use fuzzy_matcher::FuzzyMatcher;
 use gtk4::gdk::Key;
 use gtk4::glib::{self};
+use gtk4::pango;
 use gtk4::prelude::*;
 use gtk4::ListBoxRow;
 use gtk4::{Application, ApplicationWindow, Label, ListBox, ScrolledWindow, SearchEntry};
@@ -155,7 +158,12 @@ impl LauncherWindow {
 
         let search_start = std::time::Instant::now();
         let results = launcher.rt.block_on(search::search_applications(""));
-        update_results_list(&launcher.results_list, results, &launcher.app_data_store);
+        update_results_list(
+            &launcher.results_list,
+            results,
+            &launcher.app_data_store,
+            "",
+        );
         println!(
             "Initial search population ({:.3}ms)",
             search_start.elapsed().as_secs_f64() * 1000.0
@@ -209,7 +217,7 @@ impl LauncherWindow {
 
                 glib::spawn_future_local(async move {
                     let results = rt.block_on(search::search_applications(&query));
-                    update_results_list(&results_list, results, &app_data_store);
+                    update_results_list(&results_list, results, &app_data_store, &query);
                 });
             });
 
@@ -322,6 +330,7 @@ fn update_results_list(
     list: &ListBox,
     results: Vec<search::SearchResult>,
     store: &Rc<RefCell<Vec<AppEntry>>>,
+    query: &str,
 ) {
     while let Some(child) = list.first_child() {
         list.remove(&child);
@@ -341,7 +350,7 @@ fn update_results_list(
     } else {
         for result in results {
             store.push(result.app.clone());
-            let row = create_result_row(&result.app);
+            let row = create_result_row(&result.app, query);
             list.append(&row);
         }
 
@@ -351,7 +360,7 @@ fn update_results_list(
     }
 }
 
-fn create_result_row(app: &AppEntry) -> gtk4::ListBoxRow {
+fn create_result_row(app: &AppEntry, query: &str) -> gtk4::ListBoxRow {
     let config = Config::load();
     let row = gtk4::ListBoxRow::new();
     let box_row = GtkBox::new(Orientation::Horizontal, 12);
@@ -375,10 +384,40 @@ fn create_result_row(app: &AppEntry) -> gtk4::ListBoxRow {
     let text_box = GtkBox::new(Orientation::Vertical, 4);
     text_box.set_hexpand(true);
 
-    let name_label = Label::new(Some(&app.name));
+    let name_label = if config.window.highlight_matches && !query.is_empty() {
+        let matcher = SkimMatcherV2::default().smart_case();
+        if let Some((_, indices)) =
+            matcher.fuzzy_indices(&app.name.to_lowercase(), &query.to_lowercase())
+        {
+            let mut marked_text = String::new();
+            let mut last_idx = 0;
+
+            for idx in indices {
+                if idx > last_idx {
+                    marked_text.push_str(&app.name[last_idx..idx]);
+                }
+                marked_text.push_str("<span weight='bold' underline='single'>");
+                marked_text.push(app.name.chars().nth(idx).unwrap());
+                marked_text.push_str("</span>");
+                last_idx = idx + 1;
+            }
+            if last_idx < app.name.len() {
+                marked_text.push_str(&app.name[last_idx..]);
+            }
+
+            let label = Label::new(None);
+            label.set_markup(&marked_text);
+            label
+        } else {
+            Label::new(Some(&app.name))
+        }
+    } else {
+        Label::new(Some(&app.name))
+    };
+
     name_label.set_halign(gtk4::Align::Start);
     name_label.set_wrap(true);
-    name_label.set_wrap_mode(gtk4::pango::WrapMode::WordChar);
+    name_label.set_wrap_mode(pango::WrapMode::WordChar);
     name_label.set_max_width_chars(50);
     name_label.add_css_class("app-name");
     text_box.append(&name_label);
@@ -387,7 +426,7 @@ fn create_result_row(app: &AppEntry) -> gtk4::ListBoxRow {
         let desc_label = Label::new(Some(&app.description));
         desc_label.set_halign(gtk4::Align::Start);
         desc_label.set_wrap(true);
-        desc_label.set_wrap_mode(gtk4::pango::WrapMode::WordChar);
+        desc_label.set_wrap_mode(pango::WrapMode::WordChar);
         desc_label.set_max_width_chars(50);
         desc_label.add_css_class("app-description");
         text_box.append(&desc_label);
@@ -397,7 +436,7 @@ fn create_result_row(app: &AppEntry) -> gtk4::ListBoxRow {
         let path_label = Label::new(Some(&app.path));
         path_label.set_halign(gtk4::Align::Start);
         path_label.set_wrap(true);
-        path_label.set_wrap_mode(gtk4::pango::WrapMode::WordChar);
+        path_label.set_wrap_mode(pango::WrapMode::WordChar);
         path_label.set_max_width_chars(50);
         path_label.add_css_class("app-path");
         text_box.append(&path_label);

@@ -140,6 +140,7 @@ pub struct Window {
     pub border_width: i32,
     pub border_color: String,
     pub show_scrollbar: bool,
+    pub highlight_matches: bool,
 }
 
 impl Default for Window {
@@ -161,6 +162,7 @@ impl Default for Window {
             border_width: 2,
             border_color: String::from("#333333"),
             show_scrollbar: true,
+            highlight_matches: true,
         }
     }
 }
