@@ -31,6 +31,7 @@ pub enum EntryType {
 pub static HEATMAP_PATH: &str = "~/.local/share/hyprlauncher/heatmap.json";
 
 pub fn increment_launch_count(app: &AppEntry) {
+    println!("Launching application: {}", app.name);
     let app_name = app.name.clone();
     let count = app.launch_count + 1;
 
@@ -63,11 +64,13 @@ fn load_heatmap() -> HashMap<String, u32> {
 }
 
 pub async fn load_applications() {
+    println!("Loading application heatmap...");
     let heatmap = tokio::task::spawn_blocking(load_heatmap)
         .await
         .unwrap_or_default();
 
     let mut apps = HashMap::new();
+    println!("Scanning desktop entries...");
     let desktop_paths = std::env::var("XDG_DATA_DIRS")
         .map(|str| {
             str.split(':')
@@ -131,6 +134,9 @@ pub async fn load_applications() {
         }
     }
 
+    println!("Found {} desktop entries", apps.len());
+    println!("Scanning PATH for executables...");
+
     let path = std::env::var("PATH").unwrap_or_default();
     let path_entries: Vec<_> = path.split(':').collect();
 
@@ -180,6 +186,7 @@ pub async fn load_applications() {
         apps.insert(name, entry);
     }
 
+    println!("Found {} total applications", apps.len());
     let mut cache = APP_CACHE.write().await;
     *cache = apps;
 }

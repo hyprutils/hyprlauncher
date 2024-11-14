@@ -22,6 +22,7 @@ pub struct LauncherWindow {
 
 impl LauncherWindow {
     pub fn new(app: &Application, rt: Handle) -> Self {
+        println!("Creating launcher window");
         let config = Config::load();
         let window = ApplicationWindow::builder()
             .application(app)
@@ -97,6 +98,7 @@ impl LauncherWindow {
     }
 
     pub fn present(&self) {
+        println!("Presenting launcher window");
         self.window.present();
         if Config::load().show_search {
             self.search_entry.grab_focus();
@@ -329,6 +331,7 @@ fn select_previous(list: &ListBox) {
 fn launch_application(app: &AppEntry, search_entry: &SearchEntry) -> bool {
     match app.entry_type {
         EntryType::Application => {
+            println!("Launching application: {}", app.name);
             let exec = app
                 .exec
                 .replace("%f", "")
@@ -346,6 +349,7 @@ fn launch_application(app: &AppEntry, search_entry: &SearchEntry) -> bool {
         }
         EntryType::File => {
             if app.icon_name == "folder" {
+                println!("Opening folder: {}", app.path);
                 let path = if app.path.ends_with('/') {
                     app.path.clone()
                 } else {
@@ -356,6 +360,7 @@ fn launch_application(app: &AppEntry, search_entry: &SearchEntry) -> bool {
 
                 false
             } else {
+                println!("Opening file: {}", app.path);
                 Command::new("sh").arg("-c").arg(&app.exec).spawn().is_ok()
             }
         }

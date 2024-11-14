@@ -11,18 +11,22 @@ pub struct App {
 
 impl App {
     pub fn new() -> Self {
+        println!("Pre-initializing hyprlauncher");
         let rt = Runtime::new().unwrap();
 
         let app = Application::builder()
             .application_id("hyprutils.hyprlauncher")
             .build();
 
+        println!("Loading applications...");
         rt.block_on(launcher::load_applications());
+        println!("Applications loaded successfully");
 
         Self { app, rt }
     }
 
     pub fn run(&self) {
+        println!("Starting hyprlauncher");
         let rt = self.rt.handle().clone();
 
         self.app.connect_activate(move |app| {
