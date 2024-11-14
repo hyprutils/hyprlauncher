@@ -131,6 +131,7 @@ impl LauncherWindow {
             @strong self.window as window,
             @strong self.search_entry as search_entry,
             @strong app_data_store => move |_, key, _, _| {
+            let config = Config::load();
             match key {
                 Key::Escape => {
                     if search_entry.has_focus() {
@@ -153,13 +154,13 @@ impl LauncherWindow {
                     search_entry.grab_focus();
                     glib::Propagation::Stop
                 },
-                Key::Up | Key::k => {
+                Key::Up | Key::k if config.vim_keys || key == Key::Up => {
                     if !search_entry.has_focus() {
                         select_previous(&results_list);
                     }
                     glib::Propagation::Stop
                 },
-                Key::Down | Key::j => {
+                Key::Down | Key::j if config.vim_keys || key == Key::Down => {
                     if !search_entry.has_focus() {
                         select_next(&results_list);
                     }

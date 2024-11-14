@@ -10,6 +10,7 @@ pub struct Config {
     pub show_descriptions: bool,
     pub show_paths: bool,
     pub show_icons: bool,
+    pub vim_keys: bool,
 }
 
 impl Default for Config {
@@ -20,6 +21,7 @@ impl Default for Config {
             show_descriptions: false,
             show_paths: true,
             show_icons: true,
+            vim_keys: true,
         }
     }
 }
