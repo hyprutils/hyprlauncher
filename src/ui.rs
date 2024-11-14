@@ -35,18 +35,22 @@ impl LauncherWindow {
 
         let main_box = GtkBox::new(Orientation::Vertical, 0);
         let search_entry = SearchEntry::new();
-        search_entry.set_placeholder_text(Some("Press / to start searching"));
 
-        let focus_controller = gtk4::EventControllerFocus::new();
-        focus_controller.connect_enter(clone!(@strong search_entry => move |_| {
-            search_entry.set_placeholder_text(None);
-        }));
-
-        focus_controller.connect_leave(clone!(@strong search_entry => move |_| {
+        if config.show_search {
             search_entry.set_placeholder_text(Some("Press / to start searching"));
-        }));
 
-        search_entry.add_controller(focus_controller);
+            let focus_controller = gtk4::EventControllerFocus::new();
+            focus_controller.connect_enter(clone!(@strong search_entry => move |_| {
+                search_entry.set_placeholder_text(None);
+            }));
+
+            focus_controller.connect_leave(clone!(@strong search_entry => move |_| {
+                search_entry.set_placeholder_text(Some("Press / to start searching"));
+            }));
+
+            search_entry.add_controller(focus_controller);
+            main_box.append(&search_entry);
+        }
 
         let scrolled = ScrolledWindow::new();
         let results_list = ListBox::new();
@@ -55,7 +59,6 @@ impl LauncherWindow {
         results_list.set_selection_mode(gtk4::SelectionMode::Single);
 
         scrolled.set_child(Some(&results_list));
-        main_box.append(&search_entry);
         main_box.append(&scrolled);
         window.set_child(Some(&main_box));
 
@@ -93,48 +96,62 @@ impl LauncherWindow {
         launcher
     }
 
+    pub fn present(&self) {
+        self.window.present();
+        if Config::load().show_search {
+            self.search_entry.grab_focus();
+        }
+    }
+
     fn setup_signals(&self) {
+        let config = Config::load();
         let results_list = self.results_list.clone();
         let app_data_store = self.app_data_store.clone();
         let rt = self.rt.clone();
+        let window = self.window.clone();
+        let search_entry = self.search_entry.clone();
 
-        self.search_entry.connect_changed(
-            clone!(@strong results_list, @strong app_data_store => move |entry| {
-                let query = entry.text().to_string();
-                let rt = rt.clone();
-                glib::spawn_future_local(clone!(@strong results_list, @strong app_data_store => async move {
-                    let results = rt.block_on(search::search_applications(&query));
-                    update_results_list(&results_list, results, &app_data_store);
-                }));
-            }),
-        );
+        if config.show_search {
+            self.search_entry.connect_changed(
+                clone!(@strong results_list, @strong app_data_store => move |entry| {
+                    let query = entry.text().to_string();
+                    let rt = rt.clone();
+                    glib::spawn_future_local(clone!(@strong results_list, @strong app_data_store => async move {
+                        let results = rt.block_on(search::search_applications(&query));
+                        update_results_list(&results_list, results, &app_data_store);
+                    }));
+                }),
+            );
 
-        let search_controller = gtk4::EventControllerKey::new();
-        search_controller.connect_key_pressed(clone!(@strong results_list => move |_, key, _, _| {
-            match key {
-                Key::Escape => {
-                    if let Some(row) = results_list.first_child() {
-                        if let Some(list_row) = row.downcast_ref::<ListBoxRow>() {
-                            results_list.select_row(Some(list_row));
-                            list_row.grab_focus();
-                        }
+            let search_controller = gtk4::EventControllerKey::new();
+            search_controller.connect_key_pressed(
+                clone!(@strong results_list => move |_, key, _, _| {
+                    match key {
+                        Key::Escape => {
+                            if let Some(row) = results_list.first_child() {
+                                if let Some(list_row) = row.downcast_ref::<ListBoxRow>() {
+                                    results_list.select_row(Some(list_row));
+                                    list_row.grab_focus();
+                                }
+                            }
+                            glib::Propagation::Stop
+                        },
+                        _ => glib::Propagation::Proceed
                     }
-                    glib::Propagation::Stop
-                },
-                _ => glib::Propagation::Proceed
-            }
-        }));
-        self.search_entry.add_controller(search_controller);
+                }),
+            );
+            self.search_entry.add_controller(search_controller);
+        }
 
         let window_controller = gtk4::EventControllerKey::new();
         window_controller.connect_key_pressed(clone!(@strong results_list,
-            @strong self.window as window,
-            @strong self.search_entry as search_entry,
+            @strong window,
+            @strong search_entry,
             @strong app_data_store => move |_, key, _, _| {
             let config = Config::load();
             match key {
                 Key::Escape => {
-                    if search_entry.has_focus() {
+                    if config.show_search && search_entry.has_focus() {
                         if search_entry.text().is_empty() {
                             if let Some(row) = results_list.first_child() {
                                 if let Some(list_row) = row.downcast_ref::<ListBoxRow>() {
@@ -150,7 +167,7 @@ impl LauncherWindow {
                     }
                     glib::Propagation::Stop
                 },
-                Key::slash => {
+                Key::slash if config.show_search => {
                     search_entry.grab_focus();
                     glib::Propagation::Stop
                 },
@@ -171,21 +188,18 @@ impl LauncherWindow {
         }));
         self.window.add_controller(window_controller);
 
-        self.results_list
-            .connect_row_activated(clone!(@strong self.window as window,
-                @strong self.search_entry as search_entry,
-                @strong app_data_store => move |_, row| {
+        self.results_list.connect_row_activated(
+            clone!(@strong window, @strong search_entry, @strong app_data_store => move |_, row| {
                 if let Some(app_data) = get_app_data(row.index() as usize, &app_data_store) {
                     if launch_application(&app_data, &search_entry) {
                         window.close();
                     }
                 }
-            }));
+            }),
+        );
 
         self.search_entry.connect_activate(
-            clone!(@strong results_list, @strong self.window as window,
-                  @strong self.search_entry as search_entry,
-                  @strong app_data_store => move |_| {
+            clone!(@strong results_list, @strong window, @strong search_entry, @strong app_data_store => move |_| {
                 if let Some(row) = results_list.selected_row() {
                     if let Some(app_data) = get_app_data(row.index() as usize, &app_data_store) {
                         if launch_application(&app_data, &search_entry) {
@@ -195,11 +209,6 @@ impl LauncherWindow {
                 }
             }),
         );
-    }
-
-    pub fn present(&self) {
-        self.window.present();
-        self.search_entry.grab_focus();
     }
 }
 

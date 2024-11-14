@@ -11,6 +11,7 @@ pub struct Config {
     pub show_paths: bool,
     pub show_icons: bool,
     pub vim_keys: bool,
+    pub show_search: bool,
 }
 
 impl Default for Config {
@@ -22,6 +23,7 @@ impl Default for Config {
             show_paths: true,
             show_icons: true,
             vim_keys: true,
+            show_search: true,
         }
     }
 }
