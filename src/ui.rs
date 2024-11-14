@@ -323,25 +323,39 @@ fn update_results_list(
     results: Vec<search::SearchResult>,
     store: &Rc<RefCell<Vec<AppEntry>>>,
 ) {
+    let config = Config::load();
+    let empty_row = gtk4::ListBoxRow::new();
+    empty_row.set_visible(true);
+    empty_row.set_selectable(false);
+    empty_row.add_css_class("invisible-row");
+
     while let Some(child) = list.first_child() {
         list.remove(&child);
     }
 
     let mut store = store.borrow_mut();
     store.clear();
+    store.reserve(50);
 
     if results.is_empty() {
-        let empty_row = gtk4::ListBoxRow::new();
-        empty_row.set_visible(true);
-        empty_row.set_selectable(false);
-        empty_row.add_css_class("invisible-row");
         let label = Label::new(Some(""));
         empty_row.set_child(Some(&label));
         list.append(&empty_row);
     } else {
+        let results = if results.len() > 50 {
+            &results[..50]
+        } else {
+            &results
+        };
+
+        let mut rows = Vec::with_capacity(results.len());
+
         for result in results {
             store.push(result.app.clone());
-            let row = create_result_row(&result.app);
+            rows.push(create_result_row(&result.app, &config));
+        }
+
+        for row in rows {
             list.append(&row);
         }
 
@@ -351,10 +365,11 @@ fn update_results_list(
     }
 }
 
-fn create_result_row(app: &AppEntry) -> gtk4::ListBoxRow {
-    let config = Config::load();
+#[inline]
+fn create_result_row(app: &AppEntry, config: &Config) -> gtk4::ListBoxRow {
     let row = gtk4::ListBoxRow::new();
     let box_row = GtkBox::new(Orientation::Horizontal, 12);
+
     box_row.set_margin_start(12);
     box_row.set_margin_end(12);
     box_row.set_margin_top(8);
@@ -375,37 +390,35 @@ fn create_result_row(app: &AppEntry) -> gtk4::ListBoxRow {
     let text_box = GtkBox::new(Orientation::Vertical, 4);
     text_box.set_hexpand(true);
 
-    let name_label = Label::new(Some(&app.name));
-    name_label.set_halign(gtk4::Align::Start);
-    name_label.set_wrap(true);
-    name_label.set_wrap_mode(gtk4::pango::WrapMode::WordChar);
-    name_label.set_max_width_chars(50);
-    name_label.add_css_class("app-name");
+    let name_label = create_label(&app.name, "app-name", true);
     text_box.append(&name_label);
 
     if config.window.show_descriptions && !app.description.is_empty() {
-        let desc_label = Label::new(Some(&app.description));
-        desc_label.set_halign(gtk4::Align::Start);
-        desc_label.set_wrap(true);
-        desc_label.set_wrap_mode(gtk4::pango::WrapMode::WordChar);
-        desc_label.set_max_width_chars(50);
-        desc_label.add_css_class("app-description");
+        let desc_label = create_label(&app.description, "app-description", true);
         text_box.append(&desc_label);
     }
 
     if config.window.show_paths {
-        let path_label = Label::new(Some(&app.path));
-        path_label.set_halign(gtk4::Align::Start);
-        path_label.set_wrap(true);
-        path_label.set_wrap_mode(gtk4::pango::WrapMode::WordChar);
-        path_label.set_max_width_chars(50);
-        path_label.add_css_class("app-path");
+        let path_label = create_label(&app.path, "app-path", true);
         text_box.append(&path_label);
     }
 
     box_row.append(&text_box);
     row.set_child(Some(&box_row));
     row
+}
+
+#[inline]
+fn create_label(text: &str, css_class: &str, wrap: bool) -> Label {
+    let label = Label::new(Some(text));
+    label.set_halign(gtk4::Align::Start);
+    if wrap {
+        label.set_wrap(true);
+        label.set_wrap_mode(gtk4::pango::WrapMode::WordChar);
+        label.set_max_width_chars(50);
+    }
+    label.add_css_class(css_class);
+    label
 }
 
 fn select_next(list: &ListBox) {

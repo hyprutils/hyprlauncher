@@ -4,10 +4,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
+use std::path::PathBuf;
 use tokio::sync::RwLock;
 
 pub static APP_CACHE: Lazy<RwLock<HashMap<String, AppEntry>>> =
-    Lazy::new(|| RwLock::new(HashMap::new()));
+    Lazy::new(|| RwLock::new(HashMap::with_capacity(2000)));
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct AppEntry {
@@ -18,6 +19,8 @@ pub struct AppEntry {
     pub description: String,
     pub launch_count: u32,
     pub entry_type: EntryType,
+    #[serde(default)]
+    pub score_boost: i64,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -26,9 +29,9 @@ pub enum EntryType {
     File,
 }
 
-pub static HEATMAP_PATH: &str = "~/.local/share/hyprlauncher/heatmap.json";
+static HEATMAP_PATH: &str = "~/.local/share/hyprlauncher/heatmap.json";
 
-pub static DESKTOP_PATHS: &[&str] = &[
+static DESKTOP_PATHS: &[&str] = &[
     "~/.local/share/applications",
     "/usr/share/applications",
     "/usr/local/share/applications",
@@ -45,117 +48,80 @@ pub fn increment_launch_count(app: &AppEntry) {
     });
 }
 
+#[inline]
 fn save_heatmap(name: &str, count: u32) {
     let path = shellexpand::tilde(HEATMAP_PATH).to_string();
 
     if let Some(dir) = std::path::Path::new(&path).parent() {
-        std::fs::create_dir_all(dir).unwrap_or_default();
+        let _ = std::fs::create_dir_all(dir);
     }
 
     let mut heatmap = load_heatmap();
     heatmap.insert(name.to_string(), count);
 
     if let Ok(contents) = serde_json::to_string(&heatmap) {
-        fs::write(path, contents).unwrap_or_default();
+        let _ = fs::write(path, contents);
     }
 }
 
+#[inline]
 fn load_heatmap() -> HashMap<String, u32> {
     let path = shellexpand::tilde(HEATMAP_PATH).to_string();
     fs::read_to_string(path)
         .ok()
         .and_then(|contents| serde_json::from_str(&contents).ok())
-        .unwrap_or_default()
+        .unwrap_or_else(|| HashMap::with_capacity(100))
 }
 
-pub fn get_desktop_paths() -> Vec<String> {
-    let mut paths = Vec::new();
+pub fn get_desktop_paths() -> Vec<PathBuf> {
+    let mut paths = Vec::with_capacity(10);
 
     if let Ok(xdg_dirs) = std::env::var("XDG_DATA_DIRS") {
         paths.extend(
             xdg_dirs
                 .split(':')
-                .map(|dir| format!("{}/applications", dir)),
+                .map(|dir| PathBuf::from(format!("{}/applications", dir))),
         );
     }
 
-    paths.extend(DESKTOP_PATHS.iter().map(|&path| path.to_string()));
+    paths.extend(
+        DESKTOP_PATHS
+            .iter()
+            .map(|&path| PathBuf::from(shellexpand::tilde(path).to_string())),
+    );
 
     paths
 }
 
 pub async fn load_applications() {
-    let start_time = std::time::Instant::now();
-
     let heatmap_future = tokio::task::spawn_blocking(load_heatmap);
 
-    let mut apps = HashMap::with_capacity(2000);
     let desktop_paths = get_desktop_paths();
+    let mut apps = HashMap::with_capacity(2000);
 
-    let desktop_entries: Vec<_> = desktop_paths
+    let entries: Vec<_> = desktop_paths
         .par_iter()
-        .flat_map(|path| {
-            let expanded_path = shellexpand::tilde(path).to_string();
-            std::fs::read_dir(expanded_path)
-                .map(|entries| {
-                    entries
-                        .par_bridge()
-                        .filter_map(Result::ok)
-                        .filter(|e| {
-                            e.path().extension().and_then(|ext| ext.to_str()) == Some("desktop")
-                        })
-                        .filter_map(|entry| {
-                            let path = entry.path();
-                            let path_str = path.to_string_lossy();
-
-                            if let Ok(contents) = std::fs::read_to_string(&path) {
-                                let mut name = None;
-                                let mut exec = None;
-                                let mut icon = None;
-                                let mut desc = None;
-
-                                for line in contents.lines() {
-                                    if let Some(stripped) = line.strip_prefix("Name=") {
-                                        name = Some(stripped.to_string());
-                                    } else if let Some(stripped) = line.strip_prefix("Exec=") {
-                                        exec = Some(stripped.to_string());
-                                    } else if let Some(stripped) = line.strip_prefix("Icon=") {
-                                        icon = Some(stripped.to_string());
-                                    } else if line.starts_with("Comment=")
-                                        || line.starts_with("GenericName=")
-                                    {
-                                        desc = Some(
-                                            line.split_once('=')
-                                                .map(|x| x.1)
-                                                .unwrap_or("")
-                                                .to_string(),
-                                        );
-                                    }
-                                }
-
-                                name.map(|name| AppEntry {
-                                    name: name.clone(),
-                                    exec: exec.unwrap_or_default(),
-                                    icon_name: icon
-                                        .unwrap_or_else(|| "application-x-executable".to_string()),
-                                    description: desc.unwrap_or_default(),
-                                    path: path_str.into_owned(),
-                                    launch_count: 0,
-                                    entry_type: EntryType::Application,
-                                })
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default()
+        .flat_map_iter(|path| {
+            if let Ok(entries) = std::fs::read_dir(path) {
+                entries
+                    .filter_map(Result::ok)
+                    .filter(|e| {
+                        matches!(
+                            e.path().extension().and_then(|e| e.to_str()),
+                            Some("desktop")
+                        )
+                    })
+                    .filter_map(|entry| parse_desktop_entry(&entry.path()))
+                    .collect::<Vec<_>>()
+            } else {
+                Vec::new()
+            }
         })
         .collect();
 
     let heatmap = heatmap_future.await.unwrap_or_default();
 
-    for mut entry in desktop_entries {
+    for mut entry in entries {
         if let Some(count) = heatmap.get(&entry.name) {
             entry.launch_count = *count;
         }
@@ -164,12 +130,44 @@ pub async fn load_applications() {
 
     let mut cache = APP_CACHE.write().await;
     *cache = apps;
+}
 
-    println!(
-        "Found {} total applications ({:.3}ms)",
-        cache.len(),
-        start_time.elapsed().as_secs_f64() * 1000.0
-    );
+#[inline]
+fn parse_desktop_entry(path: &std::path::Path) -> Option<AppEntry> {
+    let contents = fs::read_to_string(path).ok()?;
+    let path_str = path.to_string_lossy();
+
+    let mut name = None;
+    let mut exec = None;
+    let mut icon = None;
+    let mut desc = None;
+
+    for line in contents.lines() {
+        match line.get(..=4)? {
+            "Name=" => name = Some(line[5..].to_string()),
+            "Exec=" => exec = Some(line[5..].to_string()),
+            "Icon=" => icon = Some(line[5..].to_string()),
+            _ if line.starts_with("Comment=") || line.starts_with("GenericName=") => {
+                desc = Some(line.split_once('=').map(|x| x.1).unwrap_or("").to_string())
+            }
+            _ => continue,
+        }
+
+        if name.is_some() && exec.is_some() && icon.is_some() && desc.is_some() {
+            break;
+        }
+    }
+
+    name.map(|name| AppEntry {
+        name,
+        exec: exec.unwrap_or_default(),
+        icon_name: icon.unwrap_or_else(|| "application-x-executable".to_string()),
+        description: desc.unwrap_or_default(),
+        path: path_str.into_owned(),
+        launch_count: 0,
+        entry_type: EntryType::Application,
+        score_boost: 0,
+    })
 }
 
 pub fn create_file_entry(path: String) -> Option<AppEntry> {
@@ -190,37 +188,13 @@ pub fn create_file_entry(path: String) -> Option<AppEntry> {
         .to_str()?
         .to_string();
 
-    let (icon_name, exec) = if metadata.is_dir() {
-        ("folder", String::new())
+    let (icon_name, exec, score_boost) = if metadata.is_dir() {
+        ("folder", String::new(), 2000)
     } else if metadata.permissions().mode() & 0o111 != 0 {
-        ("application-x-executable", format!("\"{}\"", path))
+        ("application-x-executable", format!("\"{}\"", path), 0)
     } else {
-        let mime_type = match std::process::Command::new("file")
-            .arg("--mime-type")
-            .arg("-b")
-            .arg(&path)
-            .output()
-        {
-            Ok(output) => String::from_utf8_lossy(&output.stdout).trim().to_string(),
-            Err(_) => String::from("application/octet-stream"),
-        };
-
-        let icon = match mime_type.split('/').next().unwrap_or("") {
-            "text" => "text-x-generic",
-            "image" => "image-x-generic",
-            "audio" => "audio-x-generic",
-            "video" => "video-x-generic",
-            "application" => match std::path::Path::new(&path)
-                .extension()
-                .and_then(|s| s.to_str())
-            {
-                Some("pdf") => "application-pdf",
-                _ => "application-x-generic",
-            },
-            _ => "text-x-generic",
-        };
-
-        (icon, format!("xdg-mime query default {} | xargs -I {{}} sh -c 'which {{}} >/dev/null && {{}} \"{}\" || xdg-open \"{}\"'", mime_type, path, path))
+        let (icon, exec) = get_mime_type_info(&path);
+        (icon, exec, 0)
     };
 
     Some(AppEntry {
@@ -231,5 +205,33 @@ pub fn create_file_entry(path: String) -> Option<AppEntry> {
         path,
         launch_count: 0,
         entry_type: EntryType::File,
+        score_boost,
     })
+}
+
+#[inline]
+fn get_mime_type_info(path: &str) -> (&'static str, String) {
+    let output = std::process::Command::new("file")
+        .arg("--mime-type")
+        .arg(path)
+        .output()
+        .ok();
+
+    let mime_type = output
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .unwrap_or_default();
+
+    let icon = if mime_type.contains("text/") {
+        "text-x-generic"
+    } else {
+        match std::path::Path::new(path)
+            .extension()
+            .and_then(|s| s.to_str())
+        {
+            Some("pdf") => "application-pdf",
+            _ => "application-x-generic",
+        }
+    };
+
+    (icon, format!("xdg-open \"{}\"", path))
 }
