@@ -32,8 +32,8 @@ impl LauncherWindow {
         let config = Config::load();
         let window = ApplicationWindow::builder()
             .application(app)
-            .default_width(config.width)
-            .default_height(config.height)
+            .default_width(config.window.width)
+            .default_height(config.window.height)
             .title("HyprLauncher")
             .build();
 
@@ -41,7 +41,7 @@ impl LauncherWindow {
         window.set_layer(Layer::Top);
         window.set_keyboard_mode(KeyboardMode::Exclusive);
 
-        match config.anchor {
+        match config.window.anchor {
             WindowAnchor::center => {
                 window.set_anchor(Edge::Left, false);
                 window.set_anchor(Edge::Right, false);
@@ -86,15 +86,15 @@ impl LauncherWindow {
             }
         }
 
-        window.set_margin(Edge::Top, config.margin_top);
-        window.set_margin(Edge::Bottom, config.margin_bottom);
-        window.set_margin(Edge::Left, config.margin_left);
-        window.set_margin(Edge::Right, config.margin_right);
+        window.set_margin(Edge::Top, config.window.margin_top);
+        window.set_margin(Edge::Bottom, config.window.margin_bottom);
+        window.set_margin(Edge::Left, config.window.margin_left);
+        window.set_margin(Edge::Right, config.window.margin_right);
 
         let main_box = GtkBox::new(Orientation::Vertical, 0);
         let search_entry = SearchEntry::new();
 
-        if config.show_search {
+        if config.window.show_search {
             search_entry.set_placeholder_text(Some("Press / to start searching"));
 
             let search_entry_enter = search_entry.clone();
@@ -167,7 +167,7 @@ impl LauncherWindow {
             present_start.elapsed().as_secs_f64() * 1000.0
         );
         self.window.present();
-        if Config::load().show_search {
+        if Config::load().window.show_search {
             self.search_entry.grab_focus();
         }
     }
@@ -175,7 +175,7 @@ impl LauncherWindow {
     fn setup_signals(&self) {
         let config = Config::load();
 
-        if config.show_search {
+        if config.window.show_search {
             let search_entry = self.search_entry.clone();
             let search_entry_for_enter = search_entry.clone();
             let search_entry_for_leave = search_entry.clone();
@@ -242,7 +242,7 @@ impl LauncherWindow {
 
             match key {
                 Key::Escape => {
-                    if config.show_search && search_entry.has_focus() {
+                    if config.window.show_search && search_entry.has_focus() {
                         if search_entry.text().is_empty() {
                             if let Some(row) = results_list.first_child() {
                                 if let Some(list_row) = row.downcast_ref::<ListBoxRow>() {
@@ -258,17 +258,17 @@ impl LauncherWindow {
                     }
                     glib::Propagation::Stop
                 }
-                Key::slash if config.show_search => {
+                Key::slash if config.window.show_search => {
                     search_entry.grab_focus();
                     glib::Propagation::Stop
                 }
-                Key::Up | Key::k if config.vim_keys || key == Key::Up => {
+                Key::Up | Key::k if config.window.vim_keys || key == Key::Up => {
                     if !search_entry.has_focus() {
                         select_previous(&results_list);
                     }
                     glib::Propagation::Stop
                 }
-                Key::Down | Key::j if config.vim_keys || key == Key::Down => {
+                Key::Down | Key::j if config.window.vim_keys || key == Key::Down => {
                     if !search_entry.has_focus() {
                         select_next(&results_list);
                     }
@@ -356,7 +356,7 @@ fn create_result_row(app: &AppEntry) -> gtk4::ListBoxRow {
     box_row.set_margin_top(8);
     box_row.set_margin_bottom(8);
 
-    if config.show_icons {
+    if config.window.show_icons {
         let icon = if !app.icon_name.is_empty() && app.icon_name != "application-x-executable" {
             gtk4::Image::from_icon_name(&app.icon_name)
         } else {
@@ -379,7 +379,7 @@ fn create_result_row(app: &AppEntry) -> gtk4::ListBoxRow {
     name_label.add_css_class("app-name");
     text_box.append(&name_label);
 
-    if config.show_descriptions && !app.description.is_empty() {
+    if config.window.show_descriptions && !app.description.is_empty() {
         let desc_label = Label::new(Some(&app.description));
         desc_label.set_halign(gtk4::Align::Start);
         desc_label.set_wrap(true);
@@ -389,7 +389,7 @@ fn create_result_row(app: &AppEntry) -> gtk4::ListBoxRow {
         text_box.append(&desc_label);
     }
 
-    if config.show_paths {
+    if config.window.show_paths {
         let path_label = Label::new(Some(&app.path));
         path_label.set_halign(gtk4::Align::Start);
         path_label.set_wrap(true);
