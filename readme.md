@@ -15,6 +15,11 @@ An unofficial GUI for launching applications, built with GTK4 and Rust. 🚀🦀
 
 [![Packaging status](https://repology.org/badge/vertical-allrepos/hyprlauncher.svg)](https://repology.org/project/hyprlauncher/versions)
 
+### Requirements
+- GTK4
+- GTK4-Layer-Shell
+- Pango
+
 ### GitHub Releases
 See Hyprlauncher's [releases page](https://github.com/hyprutils/hyprlauncher/releases) for downloadable binaries.
 
@@ -38,10 +43,9 @@ paru -S <package>
 
 ## Building from source
 1. Install Rust (preferably `rustup`) through your distro's package or [the official script](https://www.rust-lang.org/tools/install)
-2. Install `git`, `pango` and `gtk4`
-3. Clone this repository:
+2. Clone this repository:
 `git clone https://github.com/hyprutils/hyprlauncher && cd hyprlauncher`
-4. Compile the app with `cargo build --release` or run it directly with `cargo run --release`
+3. Compile the app with `cargo build --release` or run it directly with `cargo run --release`
 
 ## Credits:
 - [Nyx](https://github.com/nnyyxxxx) - Implementing the GUI, and maintaining the project
