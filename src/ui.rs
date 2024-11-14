@@ -2,7 +2,7 @@ use crate::config::{Config, WindowAnchor};
 use crate::launcher::{self, AppEntry, EntryType};
 use crate::search;
 use gtk4::gdk::Key;
-use gtk4::glib::{self, clone};
+use gtk4::glib::{self};
 use gtk4::prelude::*;
 use gtk4::ListBoxRow;
 use gtk4::{Application, ApplicationWindow, Label, ListBox, ScrolledWindow, SearchEntry};
@@ -21,6 +21,7 @@ pub struct LauncherWindow {
     rt: Handle,
 }
 
+#[allow(non_camel_case_types)]
 impl LauncherWindow {
     pub fn new(app: &Application, rt: Handle) -> Self {
         let window_start = std::time::Instant::now();
@@ -96,14 +97,18 @@ impl LauncherWindow {
         if config.show_search {
             search_entry.set_placeholder_text(Some("Press / to start searching"));
 
-            let focus_controller = gtk4::EventControllerFocus::new();
-            focus_controller.connect_enter(clone!(@strong search_entry => move |_| {
-                search_entry.set_placeholder_text(None);
-            }));
+            let search_entry_enter = search_entry.clone();
+            let search_entry_leave = search_entry.clone();
 
-            focus_controller.connect_leave(clone!(@strong search_entry => move |_| {
-                search_entry.set_placeholder_text(Some("Press / to start searching"));
-            }));
+            let focus_controller = gtk4::EventControllerFocus::new();
+
+            focus_controller.connect_enter(move |_| {
+                search_entry_enter.set_placeholder_text(None);
+            });
+
+            focus_controller.connect_leave(move |_| {
+                search_entry_leave.set_placeholder_text(Some("Press / to start searching"));
+            });
 
             search_entry.add_controller(focus_controller);
             main_box.append(&search_entry);
@@ -169,50 +174,72 @@ impl LauncherWindow {
 
     fn setup_signals(&self) {
         let config = Config::load();
-        let results_list = self.results_list.clone();
-        let app_data_store = self.app_data_store.clone();
-        let rt = self.rt.clone();
-        let window = self.window.clone();
-        let search_entry = self.search_entry.clone();
 
         if config.show_search {
-            self.search_entry.connect_changed(
-                clone!(@strong results_list, @strong app_data_store => move |entry| {
-                    let query = entry.text().to_string();
-                    let rt = rt.clone();
-                    glib::spawn_future_local(clone!(@strong results_list, @strong app_data_store => async move {
-                        let results = rt.block_on(search::search_applications(&query));
-                        update_results_list(&results_list, results, &app_data_store);
-                    }));
-                }),
-            );
+            let search_entry = self.search_entry.clone();
+            let search_entry_for_enter = search_entry.clone();
+            let search_entry_for_leave = search_entry.clone();
+            let search_entry_for_controller = search_entry.clone();
 
+            let focus_controller = gtk4::EventControllerFocus::new();
+
+            focus_controller.connect_enter(move |_| {
+                search_entry_for_enter.set_placeholder_text(None);
+            });
+
+            focus_controller.connect_leave(move |_| {
+                search_entry_for_leave.set_placeholder_text(Some("Press / to start searching"));
+            });
+
+            search_entry_for_controller.add_controller(focus_controller);
+
+            let results_list_for_search = self.results_list.clone();
+            let app_data_store_for_search = self.app_data_store.clone();
+            let rt_for_search = self.rt.clone();
+
+            self.search_entry.connect_changed(move |entry| {
+                let query = entry.text().to_string();
+                let results_list = results_list_for_search.clone();
+                let app_data_store = app_data_store_for_search.clone();
+                let rt = rt_for_search.clone();
+
+                glib::spawn_future_local(async move {
+                    let results = rt.block_on(search::search_applications(&query));
+                    update_results_list(&results_list, results, &app_data_store);
+                });
+            });
+
+            let results_list_for_search_key = self.results_list.clone();
             let search_controller = gtk4::EventControllerKey::new();
-            search_controller.connect_key_pressed(
-                clone!(@strong results_list => move |_, key, _, _| {
-                    match key {
-                        Key::Escape => {
-                            if let Some(row) = results_list.first_child() {
-                                if let Some(list_row) = row.downcast_ref::<ListBoxRow>() {
-                                    results_list.select_row(Some(list_row));
-                                    list_row.grab_focus();
-                                }
+            search_controller.connect_key_pressed(move |_, key, _, _| {
+                let results_list = results_list_for_search_key.clone();
+                match key {
+                    Key::Escape => {
+                        if let Some(row) = results_list.first_child() {
+                            if let Some(list_row) = row.downcast_ref::<ListBoxRow>() {
+                                results_list.select_row(Some(list_row));
+                                list_row.grab_focus();
                             }
-                            glib::Propagation::Stop
-                        },
-                        _ => glib::Propagation::Proceed
+                        }
+                        glib::Propagation::Stop
                     }
-                }),
-            );
+                    _ => glib::Propagation::Proceed,
+                }
+            });
             self.search_entry.add_controller(search_controller);
         }
 
+        let results_list_for_window = self.results_list.clone();
+        let window_for_window = self.window.clone();
+        let search_entry_for_window = self.search_entry.clone();
+
         let window_controller = gtk4::EventControllerKey::new();
-        window_controller.connect_key_pressed(clone!(@strong results_list,
-            @strong window,
-            @strong search_entry,
-            @strong app_data_store => move |_, key, _, _| {
+        window_controller.connect_key_pressed(move |_, key, _, _| {
             let config = Config::load();
+            let results_list = results_list_for_window.clone();
+            let window = window_for_window.clone();
+            let search_entry = search_entry_for_window.clone();
+
             match key {
                 Key::Escape => {
                     if config.show_search && search_entry.has_focus() {
@@ -230,49 +257,56 @@ impl LauncherWindow {
                         window.close();
                     }
                     glib::Propagation::Stop
-                },
+                }
                 Key::slash if config.show_search => {
                     search_entry.grab_focus();
                     glib::Propagation::Stop
-                },
+                }
                 Key::Up | Key::k if config.vim_keys || key == Key::Up => {
                     if !search_entry.has_focus() {
                         select_previous(&results_list);
                     }
                     glib::Propagation::Stop
-                },
+                }
                 Key::Down | Key::j if config.vim_keys || key == Key::Down => {
                     if !search_entry.has_focus() {
                         select_next(&results_list);
                     }
                     glib::Propagation::Stop
-                },
-                _ => glib::Propagation::Proceed
+                }
+                _ => glib::Propagation::Proceed,
             }
-        }));
+        });
         self.window.add_controller(window_controller);
 
-        self.results_list.connect_row_activated(
-            clone!(@strong window, @strong search_entry, @strong app_data_store => move |_, row| {
-                if let Some(app_data) = get_app_data(row.index() as usize, &app_data_store) {
-                    if launch_application(&app_data, &search_entry) {
-                        window.close();
-                    }
-                }
-            }),
-        );
+        let window_for_row = self.window.clone();
+        let search_entry_for_row = self.search_entry.clone();
+        let app_data_store_for_row = self.app_data_store.clone();
 
-        self.search_entry.connect_activate(
-            clone!(@strong results_list, @strong window, @strong search_entry, @strong app_data_store => move |_| {
-                if let Some(row) = results_list.selected_row() {
-                    if let Some(app_data) = get_app_data(row.index() as usize, &app_data_store) {
-                        if launch_application(&app_data, &search_entry) {
-                            window.close();
-                        }
+        self.results_list.connect_row_activated(move |_, row| {
+            if let Some(app_data) = get_app_data(row.index() as usize, &app_data_store_for_row) {
+                if launch_application(&app_data, &search_entry_for_row) {
+                    window_for_row.close();
+                }
+            }
+        });
+
+        let results_list_for_activate = self.results_list.clone();
+        let window_for_activate = self.window.clone();
+        let search_entry_for_activate = self.search_entry.clone();
+        let app_data_store_for_activate = self.app_data_store.clone();
+
+        self.search_entry.connect_activate(move |_| {
+            if let Some(row) = results_list_for_activate.selected_row() {
+                if let Some(app_data) =
+                    get_app_data(row.index() as usize, &app_data_store_for_activate)
+                {
+                    if launch_application(&app_data, &search_entry_for_activate) {
+                        window_for_activate.close();
                     }
                 }
-            }),
-        );
+            }
+        });
     }
 }
 
