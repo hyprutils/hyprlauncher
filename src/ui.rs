@@ -24,156 +24,112 @@ pub struct LauncherWindow {
 #[allow(non_camel_case_types)]
 impl LauncherWindow {
     pub fn new(app: &Application, rt: Handle) -> Self {
+        println!("Creating launcher window (0.000ms)");
         let window_start = std::time::Instant::now();
-        println!(
-            "Creating launcher window ({:.3}ms)",
-            window_start.elapsed().as_secs_f64() * 1000.0
-        );
+
         let config = Config::load();
         let window = ApplicationWindow::builder()
             .application(app)
+            .title("HyprLauncher")
             .default_width(config.window.width)
             .default_height(config.window.height)
-            .title("HyprLauncher")
             .build();
 
         window.init_layer_shell();
         window.set_layer(Layer::Top);
         window.set_keyboard_mode(KeyboardMode::Exclusive);
-
-        match config.window.anchor {
-            WindowAnchor::center => {
-                window.set_anchor(Edge::Left, false);
-                window.set_anchor(Edge::Right, false);
-                window.set_anchor(Edge::Top, false);
-                window.set_anchor(Edge::Bottom, false);
-            }
-            WindowAnchor::top => {
-                window.set_anchor(Edge::Top, true);
-                window.set_anchor(Edge::Left, false);
-                window.set_anchor(Edge::Right, false);
-            }
-            WindowAnchor::bottom => {
-                window.set_anchor(Edge::Bottom, true);
-                window.set_anchor(Edge::Left, false);
-                window.set_anchor(Edge::Right, false);
-            }
-            WindowAnchor::left => {
-                window.set_anchor(Edge::Left, true);
-                window.set_anchor(Edge::Top, false);
-                window.set_anchor(Edge::Bottom, false);
-            }
-            WindowAnchor::right => {
-                window.set_anchor(Edge::Right, true);
-                window.set_anchor(Edge::Top, false);
-                window.set_anchor(Edge::Bottom, false);
-            }
-            WindowAnchor::top_left => {
-                window.set_anchor(Edge::Top, true);
-                window.set_anchor(Edge::Left, true);
-            }
-            WindowAnchor::top_right => {
-                window.set_anchor(Edge::Top, true);
-                window.set_anchor(Edge::Right, true);
-            }
-            WindowAnchor::bottom_left => {
-                window.set_anchor(Edge::Bottom, true);
-                window.set_anchor(Edge::Left, true);
-            }
-            WindowAnchor::bottom_right => {
-                window.set_anchor(Edge::Bottom, true);
-                window.set_anchor(Edge::Right, true);
-            }
-        }
-
-        window.set_margin(Edge::Top, config.window.margin_top);
-        window.set_margin(Edge::Bottom, config.window.margin_bottom);
-        window.set_margin(Edge::Left, config.window.margin_left);
-        window.set_margin(Edge::Right, config.window.margin_right);
+        Self::setup_window_anchoring(&window, &config);
+        Self::apply_window_margins(&window, &config);
 
         let main_box = GtkBox::new(Orientation::Vertical, 0);
         let search_entry = SearchEntry::new();
-
-        if config.window.show_search {
-            search_entry.set_placeholder_text(Some("Press / to start searching"));
-
-            let search_entry_enter = search_entry.clone();
-            let search_entry_leave = search_entry.clone();
-
-            let focus_controller = gtk4::EventControllerFocus::new();
-
-            focus_controller.connect_enter(move |_| {
-                search_entry_enter.set_placeholder_text(None);
-            });
-
-            focus_controller.connect_leave(move |_| {
-                search_entry_leave.set_placeholder_text(Some("Press / to start searching"));
-            });
-
-            search_entry.add_controller(focus_controller);
-            main_box.append(&search_entry);
-        }
-
         let scrolled = ScrolledWindow::new();
         let results_list = ListBox::new();
 
         scrolled.set_vexpand(true);
+        scrolled.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::External);
         results_list.set_selection_mode(gtk4::SelectionMode::Single);
 
-        if !config.window.show_scrollbar {
-            scrolled.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::External);
-        }
-
         scrolled.set_child(Some(&results_list));
+        if config.window.show_search {
+            main_box.append(&search_entry);
+        }
         main_box.append(&scrolled);
         window.set_child(Some(&main_box));
 
-        let css_start = std::time::Instant::now();
-        let css = CssProvider::new();
-        css.load_from_data(&Config::load_css());
-        println!(
-            "CSS loading and application ({:.3}ms)",
-            css_start.elapsed().as_secs_f64() * 1000.0
-        );
-
-        let display = window.native().unwrap().display();
-        gtk4::style_context_add_provider_for_display(
-            &display,
-            &css,
-            STYLE_PROVIDER_PRIORITY_APPLICATION,
-        );
+        let css_provider = CssProvider::new();
+        css_provider.load_from_data(&Config::load_css());
+        if let Some(native) = window.native() {
+            gtk4::style_context_add_provider_for_display(
+                &native.display(),
+                &css_provider,
+                STYLE_PROVIDER_PRIORITY_APPLICATION,
+            );
+        }
 
         let launcher = Self {
             window,
             search_entry,
             results_list,
-            app_data_store: Rc::new(RefCell::new(Vec::new())),
+            app_data_store: Rc::new(RefCell::new(Vec::with_capacity(50))),
             rt,
         };
 
         launcher.setup_signals();
 
-        let search_start = std::time::Instant::now();
-        let results = launcher.rt.block_on(search::search_applications(""));
-        update_results_list(&launcher.results_list, results, &launcher.app_data_store);
+        let results_list = launcher.results_list.clone();
+        let app_data_store = launcher.app_data_store.clone();
+        let rt = launcher.rt.clone();
+
+        glib::spawn_future_local(async move {
+            let results = rt.block_on(search::search_applications(""));
+            update_results_list(&results_list, results, &app_data_store);
+        });
+
         println!(
-            "Initial search population ({:.3}ms)",
-            search_start.elapsed().as_secs_f64() * 1000.0
+            "After window creation ({:.3}ms)",
+            window_start.elapsed().as_secs_f64() * 1000.0
         );
 
         launcher
     }
 
     pub fn present(&self) {
+        println!("Presenting launcher window (0.000ms)");
         let present_start = std::time::Instant::now();
-        println!(
-            "Presenting launcher window ({:.3}ms)",
-            present_start.elapsed().as_secs_f64() * 1000.0
-        );
+
         self.window.present();
+
         if Config::load().window.show_search {
             self.search_entry.grab_focus();
         }
+
+        println!(
+            "After window present ({:.3}ms)",
+            present_start.elapsed().as_secs_f64() * 1000.0
+        );
+    }
+
+    fn setup_window_anchoring(window: &ApplicationWindow, config: &Config) {
+        let anchors = match config.window.anchor {
+            WindowAnchor::center => [false; 4],
+            WindowAnchor::top => [true, false, false, false],
+            WindowAnchor::bottom => [false, false, true, false],
+            WindowAnchor::left => [false, false, false, true],
+            WindowAnchor::right => [false, true, false, false],
+            WindowAnchor::top_left => [true, false, false, true],
+            WindowAnchor::top_right => [true, true, false, false],
+            WindowAnchor::bottom_left => [false, false, true, true],
+            WindowAnchor::bottom_right => [false, true, true, true],
+        };
+        window.set_anchors(anchors);
+    }
+
+    fn apply_window_margins(window: &ApplicationWindow, config: &Config) {
+        window.set_margin(Edge::Top, config.window.margin_top);
+        window.set_margin(Edge::Bottom, config.window.margin_bottom);
+        window.set_margin(Edge::Left, config.window.margin_left);
+        window.set_margin(Edge::Right, config.window.margin_right);
     }
 
     fn setup_signals(&self) {
@@ -323,12 +279,6 @@ fn update_results_list(
     results: Vec<search::SearchResult>,
     store: &Rc<RefCell<Vec<AppEntry>>>,
 ) {
-    let config = Config::load();
-    let empty_row = gtk4::ListBoxRow::new();
-    empty_row.set_visible(true);
-    empty_row.set_selectable(false);
-    empty_row.add_css_class("invisible-row");
-
     while let Some(child) = list.first_child() {
         list.remove(&child);
     }
@@ -338,30 +288,35 @@ fn update_results_list(
     store.reserve(50);
 
     if results.is_empty() {
-        let label = Label::new(Some(""));
-        empty_row.set_child(Some(&label));
+        let empty_row = gtk4::ListBoxRow::new();
+        empty_row.set_visible(true);
+        empty_row.set_selectable(false);
+        empty_row.add_css_class("invisible-row");
+        empty_row.set_child(Some(&Label::new(Some(""))));
         list.append(&empty_row);
+        return;
+    }
+
+    let results = if results.len() > 50 {
+        &results[..50]
     } else {
-        let results = if results.len() > 50 {
-            &results[..50]
-        } else {
-            &results
-        };
+        &results
+    };
 
-        let mut rows = Vec::with_capacity(results.len());
+    let mut rows = Vec::with_capacity(results.len());
+    store.extend(results.iter().map(|r| r.app.clone()));
 
-        for result in results {
-            store.push(result.app.clone());
-            rows.push(create_result_row(&result.app, &config));
-        }
+    let config = Config::load();
+    for result in results {
+        rows.push(create_result_row(&result.app, &config));
+    }
 
-        for row in rows {
-            list.append(&row);
-        }
+    for row in rows {
+        list.append(&row);
+    }
 
-        if let Some(first_row) = list.row_at_index(0) {
-            list.select_row(Some(&first_row));
-        }
+    if let Some(first_row) = list.row_at_index(0) {
+        list.select_row(Some(&first_row));
     }
 }
 
@@ -477,5 +432,18 @@ fn launch_application(app: &AppEntry, search_entry: &SearchEntry) -> bool {
                 Command::new("sh").arg("-c").arg(&app.exec).spawn().is_ok()
             }
         }
+    }
+}
+
+trait WindowAnchoring {
+    fn set_anchors(&self, anchors: [bool; 4]);
+}
+
+impl WindowAnchoring for ApplicationWindow {
+    fn set_anchors(&self, anchors: [bool; 4]) {
+        self.set_anchor(Edge::Top, anchors[0]);
+        self.set_anchor(Edge::Right, anchors[1]);
+        self.set_anchor(Edge::Bottom, anchors[2]);
+        self.set_anchor(Edge::Left, anchors[3]);
     }
 }

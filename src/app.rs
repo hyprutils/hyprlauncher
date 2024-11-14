@@ -47,19 +47,8 @@ impl App {
                 pre_connect.elapsed().as_secs_f64() * 1000.0
             );
 
-            let window_start = std::time::Instant::now();
             let window = LauncherWindow::new(app, rt.clone());
-            println!(
-                "After window creation ({:.3}ms)",
-                window_start.elapsed().as_secs_f64() * 1000.0
-            );
-
-            let present_start = std::time::Instant::now();
             window.present();
-            println!(
-                "After window present ({:.3}ms)",
-                present_start.elapsed().as_secs_f64() * 1000.0
-            );
 
             println!(
                 "\nGrand total time: {:.3}ms",
