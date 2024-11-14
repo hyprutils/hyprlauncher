@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use tokio::sync::RwLock;
-use walkdir::WalkDir;
 
 pub static APP_CACHE: Lazy<RwLock<HashMap<String, AppEntry>>> =
     Lazy::new(|| RwLock::new(HashMap::new()));
@@ -29,6 +28,14 @@ pub enum EntryType {
 }
 
 pub static HEATMAP_PATH: &str = "~/.local/share/hyprlauncher/heatmap.json";
+
+pub static DESKTOP_PATHS: &[&str] = &[
+    "~/.local/share/applications",
+    "/usr/share/applications",
+    "/usr/local/share/applications",
+    "/var/lib/flatpak/exports/share/applications",
+    "~/.local/share/flatpak/exports/share/applications",
+];
 
 pub fn increment_launch_count(app: &AppEntry) {
     let app_name = app.name.clone();
@@ -64,176 +71,74 @@ fn load_heatmap() -> HashMap<String, u32> {
 
 pub async fn load_applications() {
     let start_time = std::time::Instant::now();
-    println!(
-        "Loading application heatmap... ({:.3}ms)",
-        start_time.elapsed().as_secs_f64() * 1000.0
-    );
-    let heatmap = tokio::task::spawn_blocking(load_heatmap)
-        .await
-        .unwrap_or_default();
+    let heatmap_future = tokio::task::spawn_blocking(load_heatmap);
 
-    let mut apps = HashMap::new();
-    let desktop_start = std::time::Instant::now();
-    println!(
-        "Scanning desktop entries... ({:.3}ms)",
-        desktop_start.elapsed().as_secs_f64() * 1000.0
-    );
-    let desktop_paths = std::env::var("XDG_DATA_DIRS")
-        .map(|str| {
-            str.split(':')
-                .map(|str| format!("{str}/applications"))
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or(vec![
-            String::from("/usr/share/applications"),
-            String::from("/usr/local/share/applications"),
-            String::from("~/.local/share/applications"),
-        ]);
+    let mut apps = HashMap::with_capacity(2000);
 
-    for path in desktop_paths {
-        let expanded_path = shellexpand::tilde(&path).to_string();
-        if let Ok(entries) = std::fs::read_dir(expanded_path) {
-            for entry in entries.filter_map(|e| e.ok()) {
-                if let Some(name) = entry.file_name().to_str() {
-                    if name.ends_with(".desktop") {
-                        if let Ok(desktop_entry) = parse_entry(entry.path()) {
-                            if let Some(app_name) =
-                                desktop_entry.section("Desktop Entry").attr("Name")
-                            {
-                                let exec = desktop_entry
-                                    .section("Desktop Entry")
-                                    .attr("Exec")
-                                    .unwrap_or("")
-                                    .to_string();
-                                let icon = desktop_entry
-                                    .section("Desktop Entry")
-                                    .attr("Icon")
-                                    .unwrap_or("application-x-executable")
-                                    .to_string();
-                                let description = desktop_entry
-                                    .section("Desktop Entry")
-                                    .attr("Comment")
-                                    .or_else(|| {
-                                        desktop_entry.section("Desktop Entry").attr("GenericName")
-                                    })
-                                    .unwrap_or("")
-                                    .to_string();
-                                let launch_count =
-                                    heatmap.get(app_name).copied().unwrap_or_default();
-
-                                apps.insert(
-                                    app_name.to_string(),
-                                    AppEntry {
-                                        name: app_name.to_string(),
-                                        exec,
-                                        icon_name: icon,
-                                        description,
-                                        path: entry.path().to_string_lossy().to_string(),
-                                        launch_count,
-                                        entry_type: EntryType::Application,
-                                    },
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    println!(
-        "Found {} desktop entries ({:.3}ms)",
-        apps.len(),
-        desktop_start.elapsed().as_secs_f64() * 1000.0
-    );
-    let exec_start = std::time::Instant::now();
-    println!(
-        "Scanning PATH for executables... ({:.3}ms)",
-        exec_start.elapsed().as_secs_f64() * 1000.0
-    );
-
-    let path = std::env::var("PATH").unwrap_or_default();
-    let path_entries: Vec<_> = path.split(':').collect();
-
-    let results: Vec<_> = path_entries
+    let desktop_entries: Vec<_> = DESKTOP_PATHS
         .par_iter()
-        .flat_map(|path_entry| {
-            WalkDir::new(path_entry)
-                .follow_links(true)
-                .max_depth(1)
-                .into_iter()
-                .filter_map(|e| e.ok())
-                .filter(|e| {
-                    e.file_type().is_file()
-                        && e.metadata()
-                            .map(|m| m.permissions().mode() & 0o111 != 0)
-                            .unwrap_or(false)
-                })
-                .filter_map(|entry| {
-                    entry.file_name().to_str().map(|name| {
-                        let name = name.to_string();
-                        let path = entry.path().to_string_lossy().to_string();
-                        let launch_count = heatmap.get(&name).copied().unwrap_or_default();
-
-                        let icon_name = find_desktop_entry(&name)
-                            .map(|e| e.icon_name)
-                            .unwrap_or_default();
-
-                        (
-                            name.clone(),
-                            AppEntry {
-                                name,
-                                exec: path.clone(),
-                                icon_name,
-                                description: String::new(),
-                                path,
-                                launch_count,
-                                entry_type: EntryType::Application,
-                            },
-                        )
+        .flat_map(|path| {
+            let expanded_path = shellexpand::tilde(path).to_string();
+            if let Ok(entries) = std::fs::read_dir(expanded_path) {
+                entries
+                    .par_bridge()
+                    .filter_map(|e| e.ok())
+                    .filter(|e| {
+                        e.file_name()
+                            .to_str()
+                            .map_or(false, |n| n.ends_with(".desktop"))
                     })
-                })
-                .collect::<Vec<_>>()
+                    .filter_map(|entry| {
+                        let path = entry.path();
+                        let path_str = path.to_string_lossy();
+
+                        parse_entry(&path).ok().and_then(|desktop_entry| {
+                            let section = desktop_entry.section("Desktop Entry");
+                            section.attr("Name").map(|app_name| {
+                                let name = app_name.to_string();
+                                AppEntry {
+                                    name: name.clone(),
+                                    exec: section.attr("Exec").unwrap_or("").to_string(),
+                                    icon_name: section
+                                        .attr("Icon")
+                                        .unwrap_or("application-x-executable")
+                                        .to_string(),
+                                    description: section
+                                        .attr("Comment")
+                                        .or_else(|| section.attr("GenericName"))
+                                        .unwrap_or("")
+                                        .to_string(),
+                                    path: path_str.into_owned(),
+                                    launch_count: 0,
+                                    entry_type: EntryType::Application,
+                                }
+                            })
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            } else {
+                Vec::new()
+            }
         })
         .collect();
 
-    for (name, entry) in results {
-        apps.insert(name, entry);
+    let heatmap = heatmap_future.await.unwrap_or_default();
+
+    for mut entry in desktop_entries {
+        if let Some(count) = heatmap.get(&entry.name) {
+            entry.launch_count = *count;
+        }
+        apps.insert(entry.name.clone(), entry);
     }
+
+    let mut cache = APP_CACHE.write().await;
+    *cache = apps;
 
     println!(
         "Found {} total applications ({:.3}ms)",
-        apps.len(),
-        exec_start.elapsed().as_secs_f64() * 1000.0
+        cache.len(),
+        start_time.elapsed().as_secs_f64() * 1000.0
     );
-    let mut cache = APP_CACHE.write().await;
-    *cache = apps;
-}
-
-struct DesktopEntry {
-    icon_name: String,
-}
-
-fn find_desktop_entry(name: &str) -> Option<DesktopEntry> {
-    let paths = [
-        "/usr/share/applications",
-        "/usr/local/share/applications",
-        "~/.local/share/applications",
-    ];
-
-    for path in paths {
-        let desktop_file = format!("{}/{}.desktop", path, name);
-        if let Ok(entry) = parse_entry(&desktop_file) {
-            if let Some(icon) = entry.section("Desktop Entry").attr("Icon") {
-                if !icon.is_empty() {
-                    return Some(DesktopEntry {
-                        icon_name: icon.to_string(),
-                    });
-                }
-            }
-        }
-    }
-    None
 }
 
 pub fn create_file_entry(path: String) -> Option<AppEntry> {

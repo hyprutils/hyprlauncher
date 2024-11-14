@@ -67,8 +67,13 @@ impl LauncherWindow {
         main_box.append(&scrolled);
         window.set_child(Some(&main_box));
 
+        let css_start = std::time::Instant::now();
         let css = CssProvider::new();
         css.load_from_data(&Config::load_css());
+        println!(
+            "CSS loading and application ({:.3}ms)",
+            css_start.elapsed().as_secs_f64() * 1000.0
+        );
 
         let display = window.native().unwrap().display();
         gtk4::style_context_add_provider_for_display(
@@ -87,15 +92,12 @@ impl LauncherWindow {
 
         launcher.setup_signals();
 
-        let results_list = launcher.results_list.clone();
-        let app_data_store = launcher.app_data_store.clone();
-        let rt = launcher.rt.clone();
-
-        glib::spawn_future_local(
-            clone!(@strong results_list, @strong app_data_store => async move {
-                let results = rt.block_on(search::search_applications(""));
-                update_results_list(&results_list, results, &app_data_store);
-            }),
+        let search_start = std::time::Instant::now();
+        let results = launcher.rt.block_on(search::search_applications(""));
+        update_results_list(&launcher.results_list, results, &launcher.app_data_store);
+        println!(
+            "Initial search population ({:.3}ms)",
+            search_start.elapsed().as_secs_f64() * 1000.0
         );
 
         launcher

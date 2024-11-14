@@ -11,22 +11,21 @@ pub struct App {
 
 impl App {
     pub fn new() -> Self {
-        let start_time = std::time::Instant::now();
-        println!(
-            "Pre-initializing hyprlauncher ({:.3}ms)",
-            start_time.elapsed().as_secs_f64() * 1000.0
-        );
         let rt = Runtime::new().unwrap();
 
+        let gtk_start = std::time::Instant::now();
         let app = Application::builder()
             .application_id("hyprutils.hyprlauncher")
             .build();
+        println!(
+            "GTK initialization ({:.3}ms)",
+            gtk_start.elapsed().as_secs_f64() * 1000.0
+        );
 
-        println!("Loading applications...");
         let load_start = std::time::Instant::now();
         rt.block_on(launcher::load_applications());
         println!(
-            "Applications loaded successfully ({:.3}ms)",
+            "Loading applications ({:.3}ms)",
             load_start.elapsed().as_secs_f64() * 1000.0
         );
 
@@ -35,10 +34,9 @@ impl App {
 
     pub fn run(&self) {
         let grand_total = std::time::Instant::now();
-        let run_start = std::time::Instant::now();
         println!(
             "Starting hyprlauncher ({:.3}ms)",
-            run_start.elapsed().as_secs_f64() * 1000.0
+            grand_total.elapsed().as_secs_f64() * 1000.0
         );
         let rt = self.rt.handle().clone();
 
