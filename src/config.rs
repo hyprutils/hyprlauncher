@@ -102,7 +102,7 @@ pub struct Theme {
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Config {
     pub window: Window,
     pub theme: Theme,
@@ -120,15 +120,6 @@ pub enum WindowAnchor {
     top_right,
     bottom_left,
     bottom_right,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            window: Window::default(),
-            theme: Theme::default(),
-        }
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
