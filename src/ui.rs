@@ -1,16 +1,17 @@
-use crate::config::{Config, WindowAnchor};
-use crate::launcher::{self, AppEntry, EntryType};
-use crate::search;
-use gtk4::gdk::Key;
-use gtk4::glib::{self};
-use gtk4::prelude::*;
-use gtk4::ListBoxRow;
-use gtk4::{Application, ApplicationWindow, Label, ListBox, ScrolledWindow, SearchEntry};
-use gtk4::{Box as GtkBox, CssProvider, Orientation, STYLE_PROVIDER_PRIORITY_APPLICATION};
+use crate::{
+    config::{Config, WindowAnchor},
+    launcher::{self, AppEntry, EntryType},
+    search,
+};
+use gtk4::{
+    gdk::Key,
+    glib::{self},
+    prelude::*,
+    Application, ApplicationWindow, Box as GtkBox, CssProvider, Label, ListBox, ListBoxRow,
+    Orientation, ScrolledWindow, SearchEntry, STYLE_PROVIDER_PRIORITY_APPLICATION,
+};
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
-use std::cell::RefCell;
-use std::process::Command;
-use std::rc::Rc;
+use std::{cell::RefCell, process::Command, rc::Rc};
 use tokio::runtime::Handle;
 
 pub struct LauncherWindow {

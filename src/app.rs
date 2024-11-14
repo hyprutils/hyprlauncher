@@ -1,7 +1,5 @@
-use crate::launcher;
-use crate::ui::LauncherWindow;
-use gtk4::prelude::*;
-use gtk4::Application;
+use crate::{launcher, ui::LauncherWindow};
+use gtk4::{prelude::*, Application};
 use tokio::runtime::Runtime;
 
 pub struct App {

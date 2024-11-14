@@ -1,10 +1,7 @@
 use once_cell::sync::Lazy;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::fs;
-use std::os::unix::fs::PermissionsExt;
-use std::path::PathBuf;
+use std::{collections::HashMap, fs, os::unix::fs::PermissionsExt, path::PathBuf};
 use tokio::sync::RwLock;
 
 pub static APP_CACHE: Lazy<RwLock<HashMap<String, AppEntry>>> =

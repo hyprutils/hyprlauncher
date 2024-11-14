@@ -1,7 +1,6 @@
 use dirs::config_dir;
 use serde::{Deserialize, Serialize};
-use std::fs;
-use std::path::PathBuf;
+use std::{fs, path::PathBuf};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Corners {

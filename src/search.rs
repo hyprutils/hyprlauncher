@@ -1,8 +1,6 @@
 use crate::launcher::{self, AppEntry, EntryType, APP_CACHE};
-use fuzzy_matcher::skim::SkimMatcherV2;
-use fuzzy_matcher::FuzzyMatcher;
-use std::os::unix::fs::PermissionsExt;
-use std::path::PathBuf;
+use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
+use std::{os::unix::fs::PermissionsExt, path::PathBuf};
 use tokio::sync::oneshot;
 
 pub struct SearchResult {
