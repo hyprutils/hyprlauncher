@@ -236,11 +236,13 @@ impl Config {
         let scrollbar_style = if window.show_scrollbar {
             String::new()
         } else {
-            String::from("
+            String::from(
+                "
 scrollbar {
     opacity: 0;
     -gtk-secondary-caret-color: transparent;
-}")
+}",
+            )
         };
 
         format!(
