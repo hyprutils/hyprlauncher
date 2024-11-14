@@ -180,10 +180,6 @@ impl Config {
             }
         }
 
-        // If no config directory found in XDG_CONFIG_DIRS, fall back to the default
-        // This is still bad, because chances are user refuses to conform to XDG spec.
-        // But what do I know?
-        // - raf
         let default_config_path = dirs::home_dir()
             .unwrap_or_else(|| PathBuf::from("~"))
             .join(".config")
