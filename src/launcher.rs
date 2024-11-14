@@ -1,4 +1,3 @@
-use freedesktop_entry_parser::parse_entry;
 use once_cell::sync::Lazy;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -87,6 +86,7 @@ pub fn get_desktop_paths() -> Vec<String> {
 
 pub async fn load_applications() {
     let start_time = std::time::Instant::now();
+
     let heatmap_future = tokio::task::spawn_blocking(load_heatmap);
 
     let mut apps = HashMap::with_capacity(2000);
@@ -96,46 +96,60 @@ pub async fn load_applications() {
         .par_iter()
         .flat_map(|path| {
             let expanded_path = shellexpand::tilde(path).to_string();
-            if let Ok(entries) = std::fs::read_dir(expanded_path) {
-                entries
-                    .par_bridge()
-                    .filter_map(|e| e.ok())
-                    .filter(|e| {
-                        e.file_name()
-                            .to_str()
-                            .map_or(false, |n| n.ends_with(".desktop"))
-                    })
-                    .filter_map(|entry| {
-                        let path = entry.path();
-                        let path_str = path.to_string_lossy();
+            std::fs::read_dir(expanded_path)
+                .map(|entries| {
+                    entries
+                        .par_bridge()
+                        .filter_map(Result::ok)
+                        .filter(|e| {
+                            e.path().extension().and_then(|ext| ext.to_str()) == Some("desktop")
+                        })
+                        .filter_map(|entry| {
+                            let path = entry.path();
+                            let path_str = path.to_string_lossy();
 
-                        parse_entry(&path).ok().and_then(|desktop_entry| {
-                            let section = desktop_entry.section("Desktop Entry");
-                            section.attr("Name").map(|app_name| {
-                                let name = app_name.to_string();
-                                AppEntry {
+                            if let Ok(contents) = std::fs::read_to_string(&path) {
+                                let mut name = None;
+                                let mut exec = None;
+                                let mut icon = None;
+                                let mut desc = None;
+
+                                for line in contents.lines() {
+                                    if let Some(stripped) = line.strip_prefix("Name=") {
+                                        name = Some(stripped.to_string());
+                                    } else if let Some(stripped) = line.strip_prefix("Exec=") {
+                                        exec = Some(stripped.to_string());
+                                    } else if let Some(stripped) = line.strip_prefix("Icon=") {
+                                        icon = Some(stripped.to_string());
+                                    } else if line.starts_with("Comment=")
+                                        || line.starts_with("GenericName=")
+                                    {
+                                        desc = Some(
+                                            line.split_once('=')
+                                                .map(|x| x.1)
+                                                .unwrap_or("")
+                                                .to_string(),
+                                        );
+                                    }
+                                }
+
+                                name.map(|name| AppEntry {
                                     name: name.clone(),
-                                    exec: section.attr("Exec").unwrap_or("").to_string(),
-                                    icon_name: section
-                                        .attr("Icon")
-                                        .unwrap_or("application-x-executable")
-                                        .to_string(),
-                                    description: section
-                                        .attr("Comment")
-                                        .or_else(|| section.attr("GenericName"))
-                                        .unwrap_or("")
-                                        .to_string(),
+                                    exec: exec.unwrap_or_default(),
+                                    icon_name: icon
+                                        .unwrap_or_else(|| "application-x-executable".to_string()),
+                                    description: desc.unwrap_or_default(),
                                     path: path_str.into_owned(),
                                     launch_count: 0,
                                     entry_type: EntryType::Application,
-                                }
-                            })
+                                })
+                            } else {
+                                None
+                            }
                         })
-                    })
-                    .collect::<Vec<_>>()
-            } else {
-                Vec::new()
-            }
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default()
         })
         .collect();
 
