@@ -1,5 +1,9 @@
 use crate::{launcher, ui::LauncherWindow};
-use gtk4::{prelude::*, Application, gio::Cancellable};
+use gtk4::{gio::Cancellable, prelude::*, Application};
+use std::fs::{self, File};
+use std::io::Write;
+use std::path::PathBuf;
+use std::process;
 use tokio::runtime::Runtime;
 
 pub struct App {
@@ -10,6 +14,11 @@ pub struct App {
 impl App {
     pub fn new() -> Self {
         let rt = Runtime::new().expect("Failed to create Tokio runtime");
+
+        if !Self::can_create_instance() {
+            println!("Maximum number of instances reached");
+            process::exit(0);
+        }
 
         let app = Application::builder()
             .application_id("hyprutils.hyprlauncher")
@@ -47,5 +56,75 @@ impl App {
         });
 
         self.app.run();
+
+        if let Some(instance_file) = Self::get_instance_file() {
+            let _ = fs::remove_file(instance_file);
+        }
     }
+
+    fn get_instance_file() -> Option<PathBuf> {
+        let runtime_dir = PathBuf::from("/tmp/hyprlauncher");
+        let pid = process::id();
+        Some(runtime_dir.join(format!("instance-{}", pid)))
+    }
+
+    fn can_create_instance() -> bool {
+        let runtime_dir = PathBuf::from("/tmp/hyprlauncher");
+        let _ = fs::create_dir_all(&runtime_dir);
+
+        Self::cleanup_stale_instances(&runtime_dir);
+
+        let instances: Vec<_> = fs::read_dir(&runtime_dir)
+            .unwrap_or_else(|_| panic!("Failed to read runtime directory"))
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().starts_with("instance-"))
+            .collect();
+
+        if instances.len() >= 2 {
+            return false;
+        }
+
+        let pid = process::id();
+        let instance_file = runtime_dir.join(format!("instance-{}", pid));
+        let mut file = File::create(&instance_file).unwrap();
+        let _ = writeln!(
+            file,
+            "{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+        );
+
+        let instance_file_clone = instance_file.clone();
+        ctrlc::set_handler(move || {
+            let _ = fs::remove_file(&instance_file_clone);
+            process::exit(0);
+        })
+        .expect("Error setting Ctrl-C handler");
+
+        true
+    }
+
+    fn cleanup_stale_instances(runtime_dir: &PathBuf) {
+        if let Ok(entries) = fs::read_dir(runtime_dir) {
+            for entry in entries.filter_map(Result::ok) {
+                let path = entry.path();
+                if let Some(filename) = path.file_name() {
+                    if let Some(pid_str) = filename.to_string_lossy().strip_prefix("instance-") {
+                        if let Ok(pid) = pid_str.parse::<u32>() {
+                            if !process_exists(pid) {
+                                let _ = fs::remove_file(path);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn process_exists(pid: u32) -> bool {
+    std::path::Path::new(&format!("/proc/{}", pid)).exists()
 }
