@@ -21,9 +21,11 @@ pub struct App {
 
 impl App {
     pub fn new() -> Self {
+        println!("Initializing application runtime...");
         let rt = Runtime::new().expect("Failed to create Tokio runtime");
 
         if !Self::can_create_instance() {
+            println!("Another instance is already running, exiting");
             let app = Application::builder()
                 .application_id("hyprutils.hyprlauncher")
                 .flags(gtk4::gio::ApplicationFlags::ALLOW_REPLACEMENT)
@@ -36,6 +38,7 @@ impl App {
             process::exit(0);
         }
 
+        println!("Creating new application instance");
         let app = Application::builder()
             .application_id("hyprutils.hyprlauncher")
             .flags(gtk4::gio::ApplicationFlags::ALLOW_REPLACEMENT)

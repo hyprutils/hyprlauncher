@@ -193,15 +193,18 @@ impl Config {
 
     pub fn load() -> Self {
         let config_file = Self::config_dir().join("config.json");
+        println!("Loading configuration from: {:?}", config_file);
         let default_config = Config::default();
 
         if !config_file.exists() {
+            println!("Config file not found, creating default configuration");
             if let Ok(contents) = serde_json::to_string_pretty(&default_config) {
                 fs::write(&config_file, contents).unwrap_or_default();
             }
             return default_config;
         }
 
+        println!("Reading existing configuration");
         let existing_config: serde_json::Value = fs::read_to_string(&config_file)
             .ok()
             .and_then(|contents| serde_json::from_str(&contents).ok())
@@ -392,7 +395,8 @@ impl Config {
 
     pub fn watch_changes<F: Fn() + Send + 'static>(callback: F) {
         let config_path = Self::config_dir().join("config.json");
-
+        println!("Setting up config file watcher for: {:?}", config_path);
+        
         thread::spawn(move || {
             let (tx, rx) = channel();
 
@@ -406,15 +410,17 @@ impl Config {
             loop {
                 match rx.recv() {
                     Ok(_) => {
+                        println!("Config file change detected");
                         thread::sleep(std::time::Duration::from_millis(100));
                         callback();
                     }
                     Err(e) => {
-                        eprintln!("Watch error: {:?}", e);
+                        println!("Watch error: {:?}", e);
                         break;
                     }
                 }
             }
+            println!("Config watcher stopped");
             drop(watcher);
         });
     }
