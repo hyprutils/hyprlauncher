@@ -159,7 +159,6 @@ pub struct Window {
     pub show_border: bool,
     pub border_width: i32,
     pub border_color: String,
-    pub show_scrollbar: bool,
     pub use_gtk_colors: bool,
 }
 
@@ -181,7 +180,6 @@ impl Default for Window {
             show_border: true,
             border_width: 2,
             border_color: String::from("#333333"),
-            show_scrollbar: false,
             use_gtk_colors: false,
         }
     }
@@ -240,12 +238,6 @@ impl Config {
             String::from("border: none;")
         };
 
-        let scrollbar_style = if window.show_scrollbar {
-            String::new()
-        } else {
-            String::from("\nscrollbar { opacity: 0; -gtk-secondary-caret-color: transparent; }")
-        };
-
         let colors = if window.use_gtk_colors {
             format!(
                 "window {{
@@ -298,7 +290,8 @@ impl Config {
                     font-size: {}px;
                     font-family: {};
                     opacity: 0.8;
-                }}",
+                }}
+                scrollbar {{ opacity: 0; -gtk-secondary-caret-color: transparent; }}",
                 theme.corners.window,
                 border_style,
                 theme.spacing.item_padding,
@@ -366,23 +359,7 @@ impl Config {
                     font-family: {};
                     opacity: 0.8;
                 }}
-                scrollbar {{
-                    background-color: transparent;
-                    border: none;
-                }}
-                scrollbar slider {{
-                    min-width: 6px;
-                    min-height: 6px;
-                    border-radius: 3px;
-                    background-color: alpha(#808080, 0.7);
-                }}
-                scrollbar.vertical slider {{
-                    min-width: 6px;
-                }}
-                scrollbar.horizontal slider {{
-                    min-height: 6px;
-                }}
-                {}",
+                scrollbar {{ opacity: 0; -gtk-secondary-caret-color: transparent; }}",
                 theme.colors.window_bg,
                 theme.corners.window,
                 border_style,
@@ -408,11 +385,10 @@ impl Config {
                 theme.colors.item_path,
                 theme.typography.item_path_size,
                 theme.typography.item_path_font_family,
-                scrollbar_style,
             )
         };
 
-        format!("{}\n{}", colors, scrollbar_style)
+        colors
     }
 }
 
