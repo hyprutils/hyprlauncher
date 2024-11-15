@@ -54,15 +54,22 @@ impl App {
 
         let app_clone = app.clone();
         let mut last_config = Config::load();
+        let mut last_update = std::time::Instant::now();
+
         glib::timeout_add_local(Duration::from_millis(100), move || {
             if rx.try_recv().is_ok() {
-                if let Some(window) = app_clone.windows().first() {
-                    let new_config = Config::load();
-                    if new_config != last_config {
-                        if let Some(launcher_window) = window.downcast_ref::<ApplicationWindow>() {
-                            LauncherWindow::update_window_config(launcher_window, &new_config);
+                let now = std::time::Instant::now();
+                if now.duration_since(last_update).as_millis() > 250 {
+                    if let Some(window) = app_clone.windows().first() {
+                        let new_config = Config::load();
+                        if new_config != last_config {
+                            if let Some(launcher_window) = window.downcast_ref::<ApplicationWindow>() {
+                                println!("Applying config changes to window...");
+                                LauncherWindow::update_window_config(launcher_window, &new_config);
+                                last_config = new_config;
+                                last_update = now;
+                            }
                         }
-                        last_config = new_config;
                     }
                 }
             }
