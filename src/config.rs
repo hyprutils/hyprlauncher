@@ -415,6 +415,7 @@ impl Config {
                     }
                 }
             }
+            drop(watcher);
         });
     }
 }
