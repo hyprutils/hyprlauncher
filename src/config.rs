@@ -1,8 +1,6 @@
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
-use std::sync::mpsc::channel;
-use std::thread;
-use std::{env, fs, path::PathBuf, sync::LazyLock};
+use std::{thread, sync::mpsc::channel, env, fs, path::PathBuf, sync::LazyLock};
 
 static CONFIG_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
     let xdg_config_dirs = env::var("XDG_CONFIG_DIRS").unwrap_or_else(|_| String::from("/etc/xdg"));
