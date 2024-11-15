@@ -160,6 +160,7 @@ pub struct Window {
     pub border_width: i32,
     pub border_color: String,
     pub show_scrollbar: bool,
+    pub use_gtk_colors: bool,
 }
 
 impl Default for Window {
@@ -181,6 +182,7 @@ impl Default for Window {
             border_width: 2,
             border_color: String::from("#333333"),
             show_scrollbar: false,
+            use_gtk_colors: false,
         }
     }
 }
@@ -225,115 +227,192 @@ impl Config {
         let theme = &self.theme;
         let window = &self.window;
 
+        let border_style = if window.show_border {
+            if window.use_gtk_colors {
+                format!("border: {}px solid @borders;", window.border_width)
+            } else {
+                format!(
+                    "border: {}px solid {};",
+                    window.border_width, window.border_color
+                )
+            }
+        } else {
+            String::from("border: none;")
+        };
+
         let scrollbar_style = if window.show_scrollbar {
             String::new()
         } else {
             String::from("\nscrollbar { opacity: 0; -gtk-secondary-caret-color: transparent; }")
         };
 
-        format!(
-            "window {{
-                background-color: {};
-                border-radius: {}px;
-                {}
-            }}
-            list {{
-                background: {};
-            }}
-            list row {{
-                padding: {}px;
-                margin: {}px;
-                border-radius: {}px;
-                background: {};
-                transition: all 200ms ease;
-            }}
-            list row:selected {{
-                background-color: {};
-            }}
-            list row:hover:not(:selected) {{
-                background-color: {};
-            }}
-            entry {{
-                margin: {}px;
-                padding: {}px;
-                border-radius: {}px;
-                background-color: {};
-                color: {};
-                caret-color: {};
-                font-size: {}px;
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-            }}
-            entry:focus {{
-                background-color: {};
-            }}
-            .app-name {{
-                color: {};
-                font-size: {}px;
-                font-weight: bold;
-                margin-right: 8px;
-            }}
-            .app-description {{
-                color: {};
-                font-size: {}px;
-                margin-right: 8px;
-            }}
-            .app-path {{
-                color: {};
-                font-size: {}px;
-                font-family: {};
-                opacity: 0.8;
-            }}
-            scrollbar {{
-                background-color: transparent;
-                border: none;
-            }}
-            scrollbar slider {{
-                min-width: 6px;
-                min-height: 6px;
-                border-radius: 3px;
-                background-color: alpha(#808080, 0.7);
-            }}
-            scrollbar.vertical slider {{
-                min-width: 6px;
-            }}
-            scrollbar.horizontal slider {{
-                min-height: 6px;
-            }}
-            {}",
-            theme.colors.window_bg,
-            theme.corners.window,
-            if window.show_border {
-                format!(
-                    "border: {}px solid {};",
-                    window.border_width, window.border_color
-                )
-            } else {
-                String::from("border: none;")
-            },
-            theme.colors.window_bg,
-            theme.spacing.item_padding,
-            theme.spacing.item_margin,
-            theme.corners.list_item,
-            theme.colors.item_bg,
-            theme.colors.item_bg_selected,
-            theme.colors.item_bg_hover,
-            theme.spacing.search_margin,
-            theme.spacing.search_padding,
-            theme.corners.search,
-            theme.colors.search_bg,
-            theme.colors.search_text,
-            theme.colors.search_caret,
-            theme.typography.search_font_size,
-            theme.colors.search_bg_focused,
-            theme.colors.item_name,
-            theme.typography.item_name_size,
-            theme.colors.item_description,
-            theme.typography.item_description_size,
-            theme.colors.item_path,
-            theme.typography.item_path_size,
-            theme.typography.item_path_font_family,
-            scrollbar_style,
-        )
+        let colors = if window.use_gtk_colors {
+            format!(
+                "window {{
+                    background-color: @theme_bg_color;
+                    border-radius: {}px;
+                    {}
+                }}
+                list {{
+                    background: @theme_bg_color;
+                }}
+                list row {{
+                    padding: {}px;
+                    margin: {}px;
+                    border-radius: {}px;
+                    background: @theme_bg_color;
+                    transition: all 200ms ease;
+                }}
+                list row:selected {{
+                    background-color: @theme_selected_bg_color;
+                }}
+                list row:hover:not(:selected) {{
+                    background-color: mix(@theme_bg_color, @theme_fg_color, 0.95);
+                }}
+                entry {{
+                    margin: {}px;
+                    padding: {}px;
+                    border-radius: {}px;
+                    background-color: @theme_base_color;
+                    color: @theme_text_color;
+                    caret-color: @theme_text_color;
+                    font-size: {}px;
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+                }}
+                entry:focus {{
+                    background-color: @theme_base_color;
+                }}
+                .app-name {{
+                    color: @theme_text_color;
+                    font-size: {}px;
+                    font-weight: bold;
+                    margin-right: 8px;
+                }}
+                .app-description {{
+                    color: mix(@theme_fg_color, @theme_bg_color, 0.7);
+                    font-size: {}px;
+                    margin-right: 8px;
+                }}
+                .app-path {{
+                    color: mix(@theme_fg_color, @theme_bg_color, 0.5);
+                    font-size: {}px;
+                    font-family: {};
+                    opacity: 0.8;
+                }}",
+                theme.corners.window,
+                border_style,
+                theme.spacing.item_padding,
+                theme.spacing.item_margin,
+                theme.corners.list_item,
+                theme.spacing.search_margin,
+                theme.spacing.search_padding,
+                theme.corners.search,
+                theme.typography.search_font_size,
+                theme.typography.item_name_size,
+                theme.typography.item_description_size,
+                theme.typography.item_path_size,
+                theme.typography.item_path_font_family,
+            )
+        } else {
+            format!(
+                "window {{
+                    background-color: {};
+                    border-radius: {}px;
+                    {}
+                }}
+                list {{
+                    background: {};
+                }}
+                list row {{
+                    padding: {}px;
+                    margin: {}px;
+                    border-radius: {}px;
+                    background: {};
+                    transition: all 200ms ease;
+                }}
+                list row:selected {{
+                    background-color: {};
+                }}
+                list row:hover:not(:selected) {{
+                    background-color: {};
+                }}
+                entry {{
+                    margin: {}px;
+                    padding: {}px;
+                    border-radius: {}px;
+                    background-color: {};
+                    color: {};
+                    caret-color: {};
+                    font-size: {}px;
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+                }}
+                entry:focus {{
+                    background-color: {};
+                }}
+                .app-name {{
+                    color: {};
+                    font-size: {}px;
+                    font-weight: bold;
+                    margin-right: 8px;
+                }}
+                .app-description {{
+                    color: {};
+                    font-size: {}px;
+                    margin-right: 8px;
+                }}
+                .app-path {{
+                    color: {};
+                    font-size: {}px;
+                    font-family: {};
+                    opacity: 0.8;
+                }}
+                scrollbar {{
+                    background-color: transparent;
+                    border: none;
+                }}
+                scrollbar slider {{
+                    min-width: 6px;
+                    min-height: 6px;
+                    border-radius: 3px;
+                    background-color: alpha(#808080, 0.7);
+                }}
+                scrollbar.vertical slider {{
+                    min-width: 6px;
+                }}
+                scrollbar.horizontal slider {{
+                    min-height: 6px;
+                }}
+                {}",
+                theme.colors.window_bg,
+                theme.corners.window,
+                border_style,
+                theme.colors.window_bg,
+                theme.spacing.item_padding,
+                theme.spacing.item_margin,
+                theme.corners.list_item,
+                theme.colors.item_bg,
+                theme.colors.item_bg_selected,
+                theme.colors.item_bg_hover,
+                theme.spacing.search_margin,
+                theme.spacing.search_padding,
+                theme.corners.search,
+                theme.colors.search_bg,
+                theme.colors.search_text,
+                theme.colors.search_caret,
+                theme.typography.search_font_size,
+                theme.colors.search_bg_focused,
+                theme.colors.item_name,
+                theme.typography.item_name_size,
+                theme.colors.item_description,
+                theme.typography.item_description_size,
+                theme.colors.item_path,
+                theme.typography.item_path_size,
+                theme.typography.item_path_font_family,
+                scrollbar_style,
+            )
+        };
+
+        format!("{}\n{}", colors, scrollbar_style)
     }
 }
 
