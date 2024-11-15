@@ -48,7 +48,7 @@ impl LauncherWindow {
 
         window.init_layer_shell();
         window.set_layer(Layer::Top);
-        window.set_keyboard_mode(KeyboardMode::OnDemand);
+        window.set_keyboard_mode(KeyboardMode::Exclusive);
         Self::setup_window_anchoring(&window, &config);
         Self::apply_window_margins(&window, &config);
 
