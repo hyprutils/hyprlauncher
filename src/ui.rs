@@ -273,6 +273,12 @@ impl LauncherWindow {
                 }
             }
         });
+
+        let search_entry_for_hide = self.search_entry.clone();
+        self.window.connect_hide(move |_| {
+            search_entry_for_hide.set_text("");
+            search_entry_for_hide.grab_focus();
+        });
     }
 }
 
