@@ -220,7 +220,7 @@ impl LauncherWindow {
                             search_entry.set_text("");
                         }
                     } else {
-                        window.close();
+                        window.hide();
                     }
                     glib::Propagation::Stop
                 }
@@ -252,7 +252,7 @@ impl LauncherWindow {
         self.results_list.connect_row_activated(move |_, row| {
             if let Some(app_data) = get_app_data(row.index() as usize, &app_data_store_for_row) {
                 if launch_application(&app_data, &search_entry_for_row) {
-                    window_for_row.close();
+                    window_for_row.hide();
                 }
             }
         });
@@ -268,7 +268,7 @@ impl LauncherWindow {
                     get_app_data(row.index() as usize, &app_data_store_for_activate)
                 {
                     if launch_application(&app_data, &search_entry_for_activate) {
-                        window_for_activate.close();
+                        window_for_activate.hide();
                     }
                 }
             }

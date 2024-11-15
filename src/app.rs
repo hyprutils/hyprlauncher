@@ -1,5 +1,5 @@
 use crate::{launcher, ui::LauncherWindow};
-use gtk4::{prelude::*, Application};
+use gtk4::{prelude::*, Application, gio::Cancellable};
 use tokio::runtime::Runtime;
 
 pub struct App {
@@ -11,65 +11,40 @@ impl App {
     pub fn new() -> Self {
         let rt = Runtime::new().expect("Failed to create Tokio runtime");
 
-        let load_start = std::time::Instant::now();
-        rt.block_on(async {
-            launcher::load_applications().await;
-        });
-        println!(
-            "Loading applications ({:.3}ms)",
-            load_start.elapsed().as_secs_f64() * 1000.0
-        );
-
-        let pre_gtk = std::time::Instant::now();
-        println!("Before GTK app creation");
-
         let app = Application::builder()
             .application_id("hyprutils.hyprlauncher")
+            .flags(gtk4::gio::ApplicationFlags::ALLOW_REPLACEMENT)
             .build();
 
-        println!(
-            "After GTK app creation ({:.3}ms)",
-            pre_gtk.elapsed().as_secs_f64() * 1000.0
-        );
+        app.register(None::<&Cancellable>)
+            .expect("Failed to register application");
+
+        if !app.is_remote() {
+            let load_start = std::time::Instant::now();
+            rt.block_on(async {
+                launcher::load_applications().await;
+            });
+            println!(
+                "Loading applications ({:.3}ms)",
+                load_start.elapsed().as_secs_f64() * 1000.0
+            );
+        }
 
         Self { app, rt }
     }
 
     pub fn run(&self) {
-        let grand_total = std::time::Instant::now();
-        let pre_connect = std::time::Instant::now();
         let rt_handle = self.rt.handle().clone();
 
+        if self.app.is_remote() {
+            self.app.activate();
+            return;
+        }
+
         self.app.connect_activate(move |app| {
-            println!(
-                "Inside activate callback ({:.3}ms from start)",
-                pre_connect.elapsed().as_secs_f64() * 1000.0
-            );
-
-            let window_start = std::time::Instant::now();
             let window = LauncherWindow::new(app, rt_handle.clone());
-            println!(
-                "After window creation ({:.3}ms)",
-                window_start.elapsed().as_secs_f64() * 1000.0
-            );
-
-            let present_start = std::time::Instant::now();
             window.present();
-            println!(
-                "After window present ({:.3}ms)",
-                present_start.elapsed().as_secs_f64() * 1000.0
-            );
-
-            println!(
-                "\nGrand total time: {:.3}ms",
-                grand_total.elapsed().as_secs_f64() * 1000.0
-            );
         });
-
-        println!(
-            "Before app.run() ({:.3}ms)",
-            grand_total.elapsed().as_secs_f64() * 1000.0
-        );
 
         self.app.run();
     }
