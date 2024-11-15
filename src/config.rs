@@ -1,4 +1,7 @@
+use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
+use std::sync::mpsc::channel;
+use std::thread;
 use std::{env, fs, path::PathBuf, sync::LazyLock};
 
 static CONFIG_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
@@ -387,6 +390,34 @@ impl Config {
                 theme.typography.item_path_font_family,
             )
         }
+    }
+
+    pub fn watch_changes<F: Fn() + Send + 'static>(callback: F) {
+        let config_path = Self::config_dir().join("config.json");
+
+        thread::spawn(move || {
+            let (tx, rx) = channel();
+
+            let mut watcher = RecommendedWatcher::new(tx, notify::Config::default())
+                .expect("Failed to create file watcher");
+
+            watcher
+                .watch(&config_path, RecursiveMode::NonRecursive)
+                .expect("Failed to watch config file");
+
+            loop {
+                match rx.recv() {
+                    Ok(_) => {
+                        thread::sleep(std::time::Duration::from_millis(100));
+                        callback();
+                    }
+                    Err(e) => {
+                        eprintln!("Watch error: {:?}", e);
+                        break;
+                    }
+                }
+            }
+        });
     }
 }
 

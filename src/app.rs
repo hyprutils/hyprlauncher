@@ -1,10 +1,17 @@
 use crate::ui::LauncherWindow;
-use gtk4::{prelude::*, Application};
+use gtk4::{
+    prelude::*,
+    Application,
+    ApplicationWindow,
+    glib::{self, ControlFlow},
+};
 use std::{
     fs::{self, File},
     io::Write,
     path::PathBuf,
     process,
+    sync::mpsc,
+    time::Duration,
 };
 use tokio::runtime::Runtime;
 
@@ -47,6 +54,25 @@ impl App {
                 "Loading applications ({:.3}ms)",
                 load_start.elapsed().as_secs_f64() * 1000.0
             );
+
+            let (tx, rx) = mpsc::channel();
+
+            crate::config::Config::watch_changes(move || {
+                let _ = tx.send(());
+            });
+
+            let app_clone = app.clone();
+            glib::timeout_add_local(Duration::from_millis(100), move || {
+                if let Ok(_) = rx.try_recv() {
+                    if let Some(window) = app_clone.windows().first() {
+                        let config = crate::config::Config::load();
+                        if let Some(launcher_window) = window.downcast_ref::<ApplicationWindow>() {
+                            LauncherWindow::update_window_config(launcher_window, &config);
+                        }
+                    }
+                }
+                ControlFlow::Continue
+            });
         }
 
         Self { app, rt }

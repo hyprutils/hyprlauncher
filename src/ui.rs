@@ -48,7 +48,7 @@ impl LauncherWindow {
 
         window.init_layer_shell();
         window.set_layer(Layer::Top);
-        window.set_keyboard_mode(KeyboardMode::Exclusive);
+        window.set_keyboard_mode(KeyboardMode::OnDemand);
         Self::setup_window_anchoring(&window, &config);
         Self::apply_window_margins(&window, &config);
 
@@ -279,6 +279,24 @@ impl LauncherWindow {
             search_entry_for_hide.set_text("");
             search_entry_for_hide.grab_focus();
         });
+    }
+
+    pub fn update_window_config(window: &ApplicationWindow, config: &Config) {
+        window.set_default_width(config.window.width);
+        window.set_default_height(config.window.height);
+
+        Self::setup_window_anchoring(window, config);
+        Self::apply_window_margins(window, config);
+
+        if let Some(native) = window.native() {
+            let css_provider = CssProvider::new();
+            css_provider.load_from_data(&config.get_css());
+            gtk4::style_context_add_provider_for_display(
+                &native.display(),
+                &css_provider,
+                STYLE_PROVIDER_PRIORITY_APPLICATION,
+            );
+        }
     }
 }
 
