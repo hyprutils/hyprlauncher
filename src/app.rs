@@ -44,6 +44,28 @@ impl App {
         app.register(None::<&gtk4::gio::Cancellable>)
             .expect("Failed to register application");
 
+        let (tx, rx) = mpsc::channel();
+        crate::config::Config::watch_changes(move || {
+            let _ = tx.send(());
+        });
+
+        let app_clone = app.clone();
+        let mut last_config = Config::load();
+        glib::timeout_add_local(Duration::from_millis(100), move || {
+            if let Ok(_) = rx.try_recv() {
+                if let Some(window) = app_clone.windows().first() {
+                    let new_config = Config::load();
+                    if new_config != last_config {
+                        if let Some(launcher_window) = window.downcast_ref::<ApplicationWindow>() {
+                            LauncherWindow::update_window_config(launcher_window, &new_config);
+                        }
+                        last_config = new_config;
+                    }
+                }
+            }
+            ControlFlow::Continue
+        });
+
         if !app.is_remote() {
             let load_start = std::time::Instant::now();
             rt.block_on(async {
@@ -53,31 +75,6 @@ impl App {
                 "Loading applications ({:.3}ms)",
                 load_start.elapsed().as_secs_f64() * 1000.0
             );
-
-            let (tx, rx) = mpsc::channel();
-
-            crate::config::Config::watch_changes(move || {
-                let _ = tx.send(());
-            });
-
-            let app_clone = app.clone();
-            let mut last_config = Config::load();
-            glib::timeout_add_local(Duration::from_millis(100), move || {
-                if let Ok(_) = rx.try_recv() {
-                    if let Some(window) = app_clone.windows().first() {
-                        let new_config = Config::load();
-                        if new_config != last_config {
-                            if let Some(launcher_window) =
-                                window.downcast_ref::<ApplicationWindow>()
-                            {
-                                LauncherWindow::update_window_config(launcher_window, &new_config);
-                            }
-                            last_config = new_config;
-                        }
-                    }
-                }
-                ControlFlow::Continue
-            });
         }
 
         Self { app, rt }
