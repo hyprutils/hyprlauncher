@@ -396,7 +396,10 @@ impl Config {
     pub fn watch_changes<F: Fn() + Send + 'static>(callback: F) {
         let config_path = Self::config_dir().join("config.json");
         println!("Setting up config file watcher for: {:?}", config_path);
-        
+
+        let mut last_content = fs::read_to_string(&config_path).ok();
+        let mut last_update = std::time::Instant::now();
+
         thread::spawn(move || {
             let (tx, rx) = channel();
 
@@ -410,9 +413,17 @@ impl Config {
             loop {
                 match rx.recv() {
                     Ok(_) => {
-                        println!("Config file change detected");
-                        thread::sleep(std::time::Duration::from_millis(100));
-                        callback();
+                        let now = std::time::Instant::now();
+                        if now.duration_since(last_update).as_millis() > 100 {
+                            if let Ok(new_content) = fs::read_to_string(&config_path) {
+                                if last_content.as_ref() != Some(&new_content) {
+                                    println!("Config file change detected");
+                                    last_content = Some(new_content);
+                                    last_update = now;
+                                    callback();
+                                }
+                            }
+                        }
                     }
                     Err(e) => {
                         println!("Watch error: {:?}", e);
