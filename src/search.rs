@@ -44,23 +44,21 @@ pub async fn search_applications(query: &str) -> Vec<SearchResult> {
                 let mut seen_names = std::collections::HashSet::new();
 
                 for app in cache.values() {
-                    let name_lower = app.name.to_lowercase();
-
-                    if name_lower == query {
+                    if app.name_lowercase == query {
                         results.push(SearchResult {
                             app: app.clone(),
                             score: 10000 + calculate_bonus_score(app),
                         });
-                        seen_names.insert(name_lower);
+                        seen_names.insert(&app.name_lowercase);
                         continue;
                     }
 
-                    if let Some(score) = matcher.fuzzy_match(&name_lower, &query) {
+                    if let Some(score) = matcher.fuzzy_match(&app.name_lowercase, &query) {
                         results.push(SearchResult {
                             app: app.clone(),
                             score: score + calculate_bonus_score(app),
                         });
-                        seen_names.insert(name_lower);
+                        seen_names.insert(&app.name_lowercase);
                     }
                 }
 
@@ -108,6 +106,7 @@ fn check_binary(query: &str) -> Option<SearchResult> {
         .map(|_| SearchResult {
             app: AppEntry {
                 name: query.to_string(),
+                name_lowercase: query.to_lowercase(),
                 exec: if parts.len() > 1 {
                     format!("{} {}", bin_path, parts[1..].join(" "))
                 } else {

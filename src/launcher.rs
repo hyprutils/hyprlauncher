@@ -10,6 +10,7 @@ pub static APP_CACHE: Lazy<RwLock<HashMap<String, AppEntry>>> =
 #[derive(Clone, Serialize, Deserialize)]
 pub struct AppEntry {
     pub name: String,
+    pub name_lowercase: String,
     pub exec: String,
     pub icon_name: String,
     pub path: String,
@@ -156,6 +157,7 @@ fn parse_desktop_entry(path: &std::path::Path) -> Option<AppEntry> {
     }
 
     name.map(|name| AppEntry {
+        name_lowercase: name.to_lowercase(),
         name,
         exec: exec.unwrap_or_default(),
         icon_name: icon.unwrap_or_else(|| "application-x-executable".to_string()),
@@ -195,6 +197,7 @@ pub fn create_file_entry(path: String) -> Option<AppEntry> {
     };
 
     Some(AppEntry {
+        name_lowercase: name.to_lowercase(),
         name,
         exec,
         icon_name: icon_name.to_string(),
