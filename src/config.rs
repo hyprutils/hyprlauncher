@@ -26,7 +26,7 @@ static CONFIG_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
     default_config_path
 });
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Corners {
     pub window: i32,
     pub search: i32,
@@ -43,7 +43,7 @@ impl Default for Corners {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Colors {
     pub window_bg: String,
     pub search_bg: String,
@@ -76,7 +76,7 @@ impl Default for Colors {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Spacing {
     pub search_margin: i32,
     pub search_padding: i32,
@@ -95,7 +95,7 @@ impl Default for Spacing {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Typography {
     pub search_font_size: i32,
     pub item_name_size: i32,
@@ -116,7 +116,7 @@ impl Default for Typography {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq)]
 pub struct Theme {
     pub colors: Colors,
     pub corners: Corners,
@@ -125,14 +125,14 @@ pub struct Theme {
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq)]
 pub struct Config {
     pub window: Window,
     pub theme: Theme,
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub enum WindowAnchor {
     center,
     top,
@@ -145,7 +145,7 @@ pub enum WindowAnchor {
     bottom_right,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Window {
     pub width: i32,
     pub height: i32,

@@ -297,6 +297,15 @@ impl LauncherWindow {
                 STYLE_PROVIDER_PRIORITY_APPLICATION,
             );
         }
+
+        if let Some(search_entry) = window
+            .first_child()
+            .and_then(|child| child.first_child())
+            .and_then(|child| child.downcast::<gtk4::SearchEntry>().ok())
+        {
+            search_entry.set_text("__config_reload__");
+            search_entry.set_text("");
+        }
     }
 }
 

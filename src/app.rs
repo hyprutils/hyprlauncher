@@ -1,9 +1,8 @@
-use crate::ui::LauncherWindow;
+use crate::{config::Config, ui::LauncherWindow};
 use gtk4::{
-    prelude::*,
-    Application,
-    ApplicationWindow,
     glib::{self, ControlFlow},
+    prelude::*,
+    Application, ApplicationWindow,
 };
 use std::{
     fs::{self, File},
@@ -62,12 +61,18 @@ impl App {
             });
 
             let app_clone = app.clone();
+            let mut last_config = Config::load();
             glib::timeout_add_local(Duration::from_millis(100), move || {
                 if let Ok(_) = rx.try_recv() {
                     if let Some(window) = app_clone.windows().first() {
-                        let config = crate::config::Config::load();
-                        if let Some(launcher_window) = window.downcast_ref::<ApplicationWindow>() {
-                            LauncherWindow::update_window_config(launcher_window, &config);
+                        let new_config = Config::load();
+                        if new_config != last_config {
+                            if let Some(launcher_window) =
+                                window.downcast_ref::<ApplicationWindow>()
+                            {
+                                LauncherWindow::update_window_config(launcher_window, &new_config);
+                            }
+                            last_config = new_config;
                         }
                     }
                 }
