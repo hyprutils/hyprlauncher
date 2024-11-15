@@ -455,15 +455,21 @@ fn merge_json(
                                 schema_val,
                             ),
                         );
-                    } else if existing_val.is_null()
-                        || schema_val.is_null()
-                        || (existing_val.is_string() && schema_val.is_string())
-                        || (existing_val.is_number() && schema_val.is_number())
-                        || (existing_val.is_boolean() && schema_val.is_boolean())
-                    {
-                        result.insert(key.clone(), existing_val);
-                    } else if let Some(default_val) = default_obj.get(key) {
-                        result.insert(key.clone(), default_val.clone());
+                    } else {
+                        let is_valid = match schema_val {
+                            serde_json::Value::Null => existing_val.is_null(),
+                            serde_json::Value::Bool(_) => existing_val.is_boolean(),
+                            serde_json::Value::Number(_) => existing_val.is_number(),
+                            serde_json::Value::String(_) => existing_val.is_string(),
+                            serde_json::Value::Array(_) => existing_val.is_array(),
+                            serde_json::Value::Object(_) => existing_val.is_object(),
+                        };
+
+                        if is_valid {
+                            result.insert(key.clone(), existing_val);
+                        } else if let Some(default_val) = default_obj.get(key) {
+                            result.insert(key.clone(), default_val.clone());
+                        }
                     }
                 } else if let Some(default_val) = default_obj.get(key) {
                     result.insert(key.clone(), default_val.clone());
