@@ -1,5 +1,5 @@
-use crate::{launcher, ui::LauncherWindow};
-use gtk4::{gio::Cancellable, prelude::*, Application};
+use crate::ui::LauncherWindow;
+use gtk4::{prelude::*, Application};
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::PathBuf;
@@ -25,13 +25,13 @@ impl App {
             .flags(gtk4::gio::ApplicationFlags::ALLOW_REPLACEMENT)
             .build();
 
-        app.register(None::<&Cancellable>)
+        app.register(None::<&gtk4::gio::Cancellable>)
             .expect("Failed to register application");
 
         if !app.is_remote() {
             let load_start = std::time::Instant::now();
             rt.block_on(async {
-                launcher::load_applications().await;
+                crate::launcher::load_applications().await;
             });
             println!(
                 "Loading applications ({:.3}ms)",
@@ -42,12 +42,12 @@ impl App {
         Self { app, rt }
     }
 
-    pub fn run(&self) {
+    pub fn run(&self) -> i32 {
         let rt_handle = self.rt.handle().clone();
 
         if self.app.is_remote() {
             self.app.activate();
-            return;
+            return 0;
         }
 
         self.app.connect_activate(move |app| {
@@ -55,11 +55,13 @@ impl App {
             window.present();
         });
 
-        self.app.run();
+        let status = self.app.run();
 
         if let Some(instance_file) = Self::get_instance_file() {
             let _ = fs::remove_file(instance_file);
         }
+
+        status.into()
     }
 
     fn get_instance_file() -> Option<PathBuf> {
