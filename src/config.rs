@@ -218,7 +218,7 @@ impl Config {
             Err(e) => {
                 println!(
                     "Error parsing config JSON: {} at line {}, column {}",
-                    e.to_string(),
+                    e,
                     e.line(),
                     e.column()
                 );
@@ -445,7 +445,7 @@ impl Config {
                 .expect("Failed to create file watcher");
 
             watcher
-                .watch(&config_path.parent().unwrap(), RecursiveMode::NonRecursive)
+                .watch(config_path.parent().unwrap(), RecursiveMode::NonRecursive)
                 .expect("Failed to watch config directory");
 
             loop {
