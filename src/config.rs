@@ -1,5 +1,27 @@
 use serde::{Deserialize, Serialize};
-use std::{env, fs, path::PathBuf};
+use std::{env, fs, path::PathBuf, sync::LazyLock};
+
+static CONFIG_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
+    let xdg_config_dirs = env::var("XDG_CONFIG_DIRS").unwrap_or_else(|_| String::from("/etc/xdg"));
+
+    for dir in xdg_config_dirs.split(':') {
+        let config_dir = PathBuf::from(dir).join("hyprlauncher");
+        if config_dir.exists() {
+            return config_dir;
+        }
+    }
+
+    let default_config_path = dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("~"))
+        .join(".config")
+        .join("hyprlauncher");
+
+    if !default_config_path.exists() {
+        fs::create_dir_all(&default_config_path).unwrap_or_default();
+    }
+
+    default_config_path
+});
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Corners {
@@ -164,35 +186,12 @@ impl Default for Window {
 }
 
 impl Config {
-    fn ensure_config_dir() -> PathBuf {
-        let xdg_config_dirs =
-            env::var("XDG_CONFIG_DIRS").unwrap_or_else(|_| String::from("/etc/xdg"));
-
-        let config_dirs: Vec<PathBuf> = xdg_config_dirs
-            .split(':')
-            .map(|dir| PathBuf::from(dir).join("hyprlauncher"))
-            .collect();
-
-        for dir in config_dirs {
-            if dir.exists() {
-                return dir;
-            }
-        }
-
-        let default_config_path = dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("~"))
-            .join(".config")
-            .join("hyprlauncher");
-
-        if !default_config_path.exists() {
-            fs::create_dir_all(&default_config_path).unwrap_or_default();
-        }
-
-        default_config_path
+    fn config_dir() -> &'static PathBuf {
+        &CONFIG_DIR
     }
+
     pub fn load() -> Self {
-        let config_path = Self::ensure_config_dir();
-        let config_file = config_path.join("config.json");
+        let config_file = Self::config_dir().join("config.json");
         let default_config = Config::default();
 
         if !config_file.exists() {

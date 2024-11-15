@@ -96,14 +96,23 @@ fn calculate_bonus_score(app: &AppEntry) -> i64 {
 
 #[inline(always)]
 fn check_binary(query: &str) -> Option<SearchResult> {
-    let bin_path = format!("/usr/bin/{}", query);
+    let parts: Vec<&str> = query.split_whitespace().collect();
+    if parts.is_empty() {
+        return None;
+    }
+
+    let bin_path = format!("/usr/bin/{}", parts[0]);
     std::fs::metadata(&bin_path)
         .ok()
         .filter(|metadata| metadata.permissions().mode() & 0o111 != 0)
         .map(|_| SearchResult {
             app: AppEntry {
                 name: query.to_string(),
-                exec: bin_path.clone(),
+                exec: if parts.len() > 1 {
+                    format!("{} {}", bin_path, parts[1..].join(" "))
+                } else {
+                    bin_path.clone()
+                },
                 icon_name: String::from("application-x-executable"),
                 description: String::new(),
                 path: bin_path,
