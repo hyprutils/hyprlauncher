@@ -421,7 +421,17 @@ impl Config {
         let config_path = Self::config_dir().join("config.json");
         println!("Setting up config file watcher for: {:?}", config_path);
         
-        let mut last_content = fs::read_to_string(&config_path).ok();
+        let mut last_content = match fs::read_to_string(&config_path) {
+            Ok(content) => {
+                println!("Initial config content loaded");
+                Some(content)
+            },
+            Err(e) => {
+                println!("Error reading initial config: {}", e);
+                None
+            }
+        };
+        
         let mut last_update = std::time::Instant::now();
         
         thread::spawn(move || {
@@ -436,16 +446,24 @@ impl Config {
 
             loop {
                 match rx.recv() {
-                    Ok(_) => {
+                    Ok(event) => {
+                        println!("Received file system event: {:?}", event);
                         let now = std::time::Instant::now();
                         if now.duration_since(last_update).as_millis() > 250 {
-                            if let Ok(new_content) = fs::read_to_string(&config_path) {
-                                if last_content.as_ref() != Some(&new_content) {
-                                    println!("Config file change detected, updating...");
-                                    last_content = Some(new_content);
-                                    last_update = now;
-                                    callback();
+                            match fs::read_to_string(&config_path) {
+                                Ok(new_content) => {
+                                    if last_content.as_ref() != Some(&new_content) {
+                                        println!("Config content changed");
+                                        println!("Old content length: {}", last_content.as_ref().map(|c| c.len()).unwrap_or(0));
+                                        println!("New content length: {}", new_content.len());
+                                        last_content = Some(new_content);
+                                        last_update = now;
+                                        callback();
+                                    } else {
+                                        println!("Config content unchanged");
+                                    }
                                 }
+                                Err(e) => println!("Error reading config file: {}", e)
                             }
                         }
                     }
@@ -455,6 +473,7 @@ impl Config {
                     }
                 }
             }
+            println!("Config watcher stopped");
         });
     }
 }

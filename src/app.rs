@@ -61,14 +61,17 @@ impl App {
                 let now = std::time::Instant::now();
                 if now.duration_since(last_update).as_millis() > 250 {
                     if let Some(window) = app_clone.windows().first() {
+                        println!("Loading new config for comparison");
                         let new_config = Config::load();
                         if new_config != last_config {
                             if let Some(launcher_window) = window.downcast_ref::<ApplicationWindow>() {
-                                println!("Applying config changes to window...");
+                                println!("Config changed, updating window");
                                 LauncherWindow::update_window_config(launcher_window, &new_config);
                                 last_config = new_config;
                                 last_update = now;
                             }
+                        } else {
+                            println!("Config unchanged");
                         }
                     }
                 }
