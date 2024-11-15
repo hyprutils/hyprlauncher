@@ -52,7 +52,7 @@ impl App {
         let app_clone = app.clone();
         let mut last_config = Config::load();
         glib::timeout_add_local(Duration::from_millis(100), move || {
-            if let Ok(_) = rx.try_recv() {
+            if rx.try_recv().is_ok() {
                 if let Some(window) = app_clone.windows().first() {
                     let new_config = Config::load();
                     if new_config != last_config {

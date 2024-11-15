@@ -1,6 +1,6 @@
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
-use std::{thread, sync::mpsc::channel, env, fs, path::PathBuf, sync::LazyLock};
+use std::{env, fs, path::PathBuf, sync::mpsc::channel, sync::LazyLock, thread};
 
 static CONFIG_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
     let xdg_config_dirs = env::var("XDG_CONFIG_DIRS").unwrap_or_else(|_| String::from("/etc/xdg"));
@@ -429,7 +429,22 @@ fn merge_json(
         (serde_json::Value::Object(mut existing_obj), serde_json::Value::Object(default_obj)) => {
             let mut result = serde_json::Map::new();
 
-            for (key, schema_val) in schema.as_object().unwrap() {
+            let schema_obj = match schema.as_object() {
+                Some(obj) => obj,
+                None => return serde_json::Value::Object(default_obj),
+            };
+
+            const MAX_DEPTH: usize = 10;
+            static CURRENT_DEPTH: std::sync::atomic::AtomicUsize =
+                std::sync::atomic::AtomicUsize::new(0);
+
+            let depth = CURRENT_DEPTH.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if depth >= MAX_DEPTH {
+                CURRENT_DEPTH.store(0, std::sync::atomic::Ordering::SeqCst);
+                return serde_json::Value::Object(default_obj);
+            }
+
+            for (key, schema_val) in schema_obj {
                 if let Some(existing_val) = existing_obj.remove(key) {
                     if schema_val.is_object() && existing_val.is_object() {
                         result.insert(
@@ -440,14 +455,22 @@ fn merge_json(
                                 schema_val,
                             ),
                         );
-                    } else {
+                    } else if existing_val.is_null()
+                        || schema_val.is_null()
+                        || (existing_val.is_string() && schema_val.is_string())
+                        || (existing_val.is_number() && schema_val.is_number())
+                        || (existing_val.is_boolean() && schema_val.is_boolean())
+                    {
                         result.insert(key.clone(), existing_val);
+                    } else if let Some(default_val) = default_obj.get(key) {
+                        result.insert(key.clone(), default_val.clone());
                     }
                 } else if let Some(default_val) = default_obj.get(key) {
                     result.insert(key.clone(), default_val.clone());
                 }
             }
 
+            CURRENT_DEPTH.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
             serde_json::Value::Object(result)
         }
         (_, default) => default,
