@@ -64,7 +64,9 @@ impl App {
                         println!("Loading new config for comparison");
                         let new_config = Config::load();
                         if new_config != last_config {
-                            if let Some(launcher_window) = window.downcast_ref::<ApplicationWindow>() {
+                            if let Some(launcher_window) =
+                                window.downcast_ref::<ApplicationWindow>()
+                            {
                                 println!("Config changed, updating window");
                                 LauncherWindow::update_window_config(launcher_window, &new_config);
                                 last_config = new_config;

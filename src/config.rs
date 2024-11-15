@@ -1,6 +1,6 @@
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
-use std::{env, fs, path::PathBuf, sync::mpsc::channel, sync::LazyLock, thread};
+use std::{env, fs, path::PathBuf, sync::mpsc::channel, sync::LazyLock, thread, time::Duration};
 
 static CONFIG_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
     let xdg_config_dirs = env::var("XDG_CONFIG_DIRS").unwrap_or_else(|_| String::from("/etc/xdg"));
@@ -216,7 +216,8 @@ impl Config {
         let existing_config: serde_json::Value = match serde_json::from_str(&file_contents) {
             Ok(config) => config,
             Err(e) => {
-                println!("Error parsing config JSON: {} at line {}, column {}", 
+                println!(
+                    "Error parsing config JSON: {} at line {}, column {}",
                     e.to_string(),
                     e.line(),
                     e.column()
@@ -243,7 +244,10 @@ impl Config {
             Ok(config) => config,
             Err(e) => {
                 println!("Error converting merged config to struct: {}", e);
-                println!("Merged config was: {}", serde_json::to_string_pretty(&merged_config).unwrap_or_default());
+                println!(
+                    "Merged config was: {}",
+                    serde_json::to_string_pretty(&merged_config).unwrap_or_default()
+                );
                 default_config
             }
         }
@@ -420,20 +424,20 @@ impl Config {
     pub fn watch_changes<F: Fn() + Send + 'static>(callback: F) {
         let config_path = Self::config_dir().join("config.json");
         println!("Setting up config file watcher for: {:?}", config_path);
-        
+
         let mut last_content = match fs::read_to_string(&config_path) {
             Ok(content) => {
                 println!("Initial config content loaded");
                 Some(content)
-            },
+            }
             Err(e) => {
                 println!("Error reading initial config: {}", e);
                 None
             }
         };
-        
+
         let mut last_update = std::time::Instant::now();
-        
+
         thread::spawn(move || {
             let (tx, rx) = channel();
 
@@ -441,8 +445,8 @@ impl Config {
                 .expect("Failed to create file watcher");
 
             watcher
-                .watch(&config_path, RecursiveMode::NonRecursive)
-                .expect("Failed to watch config file");
+                .watch(&config_path.parent().unwrap(), RecursiveMode::NonRecursive)
+                .expect("Failed to watch config directory");
 
             loop {
                 match rx.recv() {
@@ -450,11 +454,16 @@ impl Config {
                         println!("Received file system event: {:?}", event);
                         let now = std::time::Instant::now();
                         if now.duration_since(last_update).as_millis() > 250 {
+                            thread::sleep(Duration::from_millis(50));
+
                             match fs::read_to_string(&config_path) {
                                 Ok(new_content) => {
                                     if last_content.as_ref() != Some(&new_content) {
                                         println!("Config content changed");
-                                        println!("Old content length: {}", last_content.as_ref().map(|c| c.len()).unwrap_or(0));
+                                        println!(
+                                            "Old content length: {}",
+                                            last_content.as_ref().map(|c| c.len()).unwrap_or(0)
+                                        );
                                         println!("New content length: {}", new_content.len());
                                         last_content = Some(new_content);
                                         last_update = now;
@@ -463,7 +472,7 @@ impl Config {
                                         println!("Config content unchanged");
                                     }
                                 }
-                                Err(e) => println!("Error reading config file: {}", e)
+                                Err(e) => println!("Error reading config file: {}", e),
                             }
                         }
                     }
@@ -473,7 +482,6 @@ impl Config {
                     }
                 }
             }
-            println!("Config watcher stopped");
         });
     }
 }
