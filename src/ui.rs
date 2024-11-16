@@ -307,13 +307,22 @@ impl LauncherWindow {
             );
         }
 
-        if let Some(search_entry) = window
-            .first_child()
-            .and_then(|child| child.first_child())
-            .and_then(|child| child.downcast::<gtk4::SearchEntry>().ok())
-        {
-            search_entry.set_text("__config_reload__");
-            search_entry.set_text("");
+        if let Some(main_box) = window.first_child() {
+            if let Some(main_box) = main_box.downcast_ref::<gtk4::Box>() {
+                let search_entry = main_box
+                    .first_child()
+                    .and_then(|child| child.downcast::<gtk4::SearchEntry>().ok());
+
+                if let Some(search_entry) = search_entry {
+                    if config.window.show_search {
+                        search_entry.set_visible(true);
+                        search_entry.set_text("__config_reload__");
+                        search_entry.set_text("");
+                    } else {
+                        search_entry.set_visible(false);
+                    }
+                }
+            }
         }
     }
 }
