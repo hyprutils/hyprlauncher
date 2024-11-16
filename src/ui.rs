@@ -48,7 +48,11 @@ impl LauncherWindow {
 
         window.init_layer_shell();
         window.set_layer(Layer::Top);
-        window.set_keyboard_mode(KeyboardMode::Exclusive);
+        window.set_keyboard_mode(if config.debug.disable_auto_focus {
+            KeyboardMode::OnDemand
+        } else {
+            KeyboardMode::Exclusive
+        });
         Self::setup_window_anchoring(&window, &config);
         Self::apply_window_margins(&window, &config);
 
@@ -284,6 +288,11 @@ impl LauncherWindow {
     pub fn update_window_config(window: &ApplicationWindow, config: &Config) {
         window.set_default_width(config.window.width);
         window.set_default_height(config.window.height);
+        window.set_keyboard_mode(if config.debug.disable_auto_focus {
+            KeyboardMode::OnDemand
+        } else {
+            KeyboardMode::Exclusive
+        });
 
         Self::setup_window_anchoring(window, config);
         Self::apply_window_margins(window, config);

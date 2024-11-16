@@ -127,6 +127,7 @@ pub struct Theme {
 pub struct Config {
     pub window: Window,
     pub theme: Theme,
+    pub debug: Debug,
 }
 
 #[allow(non_camel_case_types)]
@@ -185,6 +186,13 @@ impl Default for Window {
         }
     }
 }
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
+pub struct Debug {
+    pub disable_auto_focus: bool,
+}
+
 
 impl Config {
     fn config_dir() -> &'static PathBuf {
