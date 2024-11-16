@@ -1,6 +1,17 @@
+use crate::log;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
-use std::{env, fs, path::PathBuf, sync::mpsc::channel, sync::LazyLock, thread, time::Duration};
+use std::{
+    env, fs,
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::channel,
+        LazyLock,
+    },
+    thread,
+    time::Duration,
+};
 
 static CONFIG_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
     let xdg_config_dirs = env::var("XDG_CONFIG_DIRS").unwrap_or_else(|_| String::from("/etc/xdg"));
@@ -23,6 +34,8 @@ static CONFIG_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
 
     default_config_path
 });
+
+pub static LOGGING_ENABLED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Corners {
@@ -187,9 +200,19 @@ impl Default for Window {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Debug {
     pub disable_auto_focus: bool,
+    pub enable_logging: bool,
+}
+
+impl Default for Debug {
+    fn default() -> Self {
+        Self {
+            disable_auto_focus: false,
+            enable_logging: false,
+        }
+    }
 }
 
 impl Config {
@@ -199,22 +222,23 @@ impl Config {
 
     pub fn load() -> Self {
         let config_file = Self::config_dir().join("config.json");
-        println!("Loading configuration from: {:?}", config_file);
+        log!("Loading configuration from: {:?}", config_file);
         let default_config = Config::default();
+        LOGGING_ENABLED.store(default_config.debug.enable_logging, Ordering::SeqCst);
 
         if !config_file.exists() {
-            println!("Config file not found, creating default configuration");
+            log!("Config file not found, creating default configuration");
             if let Ok(contents) = serde_json::to_string_pretty(&default_config) {
                 fs::write(&config_file, contents).unwrap_or_default();
             }
             return default_config;
         }
 
-        println!("Reading existing configuration");
+        log!("Reading existing configuration");
         let file_contents = match fs::read_to_string(&config_file) {
             Ok(contents) => contents,
             Err(e) => {
-                println!("Error reading config file: {}", e);
+                log!("Error reading config file: {}", e);
                 return default_config;
             }
         };
@@ -222,17 +246,17 @@ impl Config {
         let existing_config: serde_json::Value = match serde_json::from_str(&file_contents) {
             Ok(config) => config,
             Err(e) => {
-                println!(
+                log!(
                     "Error parsing config JSON: {} at line {}, column {}",
                     e,
                     e.line(),
                     e.column()
                 );
-                println!("Attempting to merge partial configuration");
+                log!("Attempting to merge partial configuration");
                 match serde_json::from_str::<serde_json::Value>(&file_contents) {
                     Ok(partial_config) => partial_config,
                     Err(_) => {
-                        println!("Unable to parse partial config, using defaults");
+                        log!("Unable to parse partial config, using defaults");
                         return default_config;
                     }
                 }
@@ -242,7 +266,7 @@ impl Config {
         let default_json = match serde_json::to_value(&default_config) {
             Ok(json) => json,
             Err(e) => {
-                println!("Error converting default config to JSON: {}", e);
+                log!("Error converting default config to JSON: {}", e);
                 return default_config;
             }
         };
@@ -251,22 +275,25 @@ impl Config {
 
         if let Ok(pretty_merged) = serde_json::to_string_pretty(&merged_config) {
             if pretty_merged != file_contents {
-                println!("Writing merged configuration back to file");
+                log!("Writing merged configuration back to file");
                 fs::write(&config_file, pretty_merged).unwrap_or_default();
             }
         }
 
-        match serde_json::from_value(merged_config.clone()) {
+        let config = match serde_json::from_value(merged_config.clone()) {
             Ok(config) => config,
             Err(e) => {
-                println!("Error converting merged config to struct: {}", e);
-                println!(
+                log!("Error converting merged config to struct: {}", e);
+                log!(
                     "Merged config was: {}",
                     serde_json::to_string_pretty(&merged_config).unwrap_or_default()
                 );
                 default_config
             }
-        }
+        };
+
+        LOGGING_ENABLED.store(config.debug.enable_logging, Ordering::SeqCst);
+        config
     }
 
     pub fn get_css(&self) -> String {
@@ -439,15 +466,15 @@ impl Config {
 
     pub fn watch_changes<F: Fn() + Send + 'static>(callback: F) {
         let config_path = Self::config_dir().join("config.json");
-        println!("Setting up config file watcher for: {:?}", config_path);
+        log!("Setting up config file watcher for: {:?}", config_path);
 
         let mut last_content = match fs::read_to_string(&config_path) {
             Ok(content) => {
-                println!("Initial config content loaded");
+                log!("Initial config content loaded");
                 Some(content)
             }
             Err(e) => {
-                println!("Error reading initial config: {}", e);
+                log!("Error reading initial config: {}", e);
                 None
             }
         };
@@ -467,7 +494,7 @@ impl Config {
             loop {
                 match rx.recv() {
                     Ok(event) => {
-                        println!("Received file system event: {:?}", event);
+                        log!("Received file system event: {:?}", event);
                         let now = std::time::Instant::now();
                         if now.duration_since(last_update).as_millis() > 250 {
                             thread::sleep(Duration::from_millis(50));
@@ -475,25 +502,25 @@ impl Config {
                             match fs::read_to_string(&config_path) {
                                 Ok(new_content) => {
                                     if last_content.as_ref() != Some(&new_content) {
-                                        println!("Config content changed");
-                                        println!(
+                                        log!("Config content changed");
+                                        log!(
                                             "Old content length: {}",
                                             last_content.as_ref().map(|c| c.len()).unwrap_or(0)
                                         );
-                                        println!("New content length: {}", new_content.len());
+                                        log!("New content length: {}", new_content.len());
                                         last_content = Some(new_content);
                                         last_update = now;
                                         callback();
                                     } else {
-                                        println!("Config content unchanged");
+                                        log!("Config content unchanged");
                                     }
                                 }
-                                Err(e) => println!("Error reading config file: {}", e),
+                                Err(e) => log!("Error reading config file: {}", e),
                             }
                         }
                     }
                     Err(e) => {
-                        println!("Watch error: {:?}", e);
+                        log!("Watch error: {:?}", e);
                         break;
                     }
                 }

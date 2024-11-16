@@ -1,3 +1,4 @@
+use crate::log;
 use once_cell::sync::Lazy;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -92,11 +93,11 @@ pub fn get_desktop_paths() -> Vec<PathBuf> {
 }
 
 pub async fn load_applications() {
-    println!("Starting application loading process");
+    log!("Starting application loading process");
     let heatmap_future = tokio::task::spawn_blocking(load_heatmap);
 
     let desktop_paths = get_desktop_paths();
-    println!("Scanning desktop entry paths: {:?}", desktop_paths);
+    log!("Scanning desktop entry paths: {:?}", desktop_paths);
     let mut apps = HashMap::with_capacity(2000);
 
     let entries: Vec<_> = desktop_paths
@@ -128,7 +129,7 @@ pub async fn load_applications() {
         apps.insert(entry.name.clone(), entry);
     }
 
-    println!("Loaded {} total applications", apps.len());
+    log!("Loaded {} total applications", apps.len());
     let mut cache = APP_CACHE.write().await;
     *cache = apps;
 }

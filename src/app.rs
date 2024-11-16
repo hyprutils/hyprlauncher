@@ -1,4 +1,4 @@
-use crate::{config::Config, ui::LauncherWindow};
+use crate::{config::Config, log, ui::LauncherWindow};
 use gtk4::{
     glib::{self, ControlFlow},
     prelude::*,
@@ -21,11 +21,11 @@ pub struct App {
 
 impl App {
     pub fn new() -> Self {
-        println!("Initializing application runtime...");
+        log!("Initializing application runtime...");
         let rt = Runtime::new().expect("Failed to create Tokio runtime");
 
         if !Self::can_create_instance() {
-            println!("Another instance is already running, exiting");
+            log!("Another instance is already running, exiting");
             let app = Application::builder()
                 .application_id("hyprutils.hyprlauncher")
                 .flags(gtk4::gio::ApplicationFlags::ALLOW_REPLACEMENT)
@@ -38,7 +38,7 @@ impl App {
             process::exit(0);
         }
 
-        println!("Creating new application instance");
+        log!("Creating new application instance");
         let app = Application::builder()
             .application_id("hyprutils.hyprlauncher")
             .flags(gtk4::gio::ApplicationFlags::ALLOW_REPLACEMENT)
@@ -61,19 +61,19 @@ impl App {
                 let now = std::time::Instant::now();
                 if now.duration_since(last_update).as_millis() > 250 {
                     if let Some(window) = app_clone.windows().first() {
-                        println!("Loading new config for comparison");
+                        log!("Loading new config for comparison");
                         let new_config = Config::load();
                         if new_config != last_config {
                             if let Some(launcher_window) =
                                 window.downcast_ref::<ApplicationWindow>()
                             {
-                                println!("Config changed, updating window");
+                                log!("Config changed, updating window");
                                 LauncherWindow::update_window_config(launcher_window, &new_config);
                                 last_config = new_config;
                                 last_update = now;
                             }
                         } else {
-                            println!("Config unchanged");
+                            log!("Config unchanged");
                         }
                     }
                 }
@@ -86,7 +86,7 @@ impl App {
             rt.block_on(async {
                 crate::launcher::load_applications().await;
             });
-            println!(
+            log!(
                 "Loading applications ({:.3}ms)",
                 load_start.elapsed().as_secs_f64() * 1000.0
             );

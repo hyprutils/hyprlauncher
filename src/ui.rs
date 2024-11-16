@@ -1,7 +1,7 @@
 use crate::{
     config::{Config, WindowAnchor},
     launcher::{self, AppEntry, EntryType},
-    search,
+    log, search,
 };
 use gtk4::{
     gdk::Key,
@@ -27,14 +27,14 @@ pub struct LauncherWindow {
 impl LauncherWindow {
     pub fn new(app: &Application, rt: Handle) -> Self {
         let window_start = std::time::Instant::now();
-        println!(
+        log!(
             "Creating launcher window ({:.3}ms)",
             window_start.elapsed().as_secs_f64() * 1000.0
         );
 
         let search_start = std::time::Instant::now();
         let initial_results = rt.block_on(async { search::search_applications("").await });
-        println!(
+        log!(
             "Initial search population ({:.3}ms)",
             search_start.elapsed().as_secs_f64() * 1000.0
         );
@@ -83,7 +83,7 @@ impl LauncherWindow {
                 STYLE_PROVIDER_PRIORITY_APPLICATION,
             );
         }
-        println!(
+        log!(
             "CSS loading and application ({:.3}ms)",
             css_start.elapsed().as_secs_f64() * 1000.0
         );
@@ -107,7 +107,7 @@ impl LauncherWindow {
 
     pub fn present(&self) {
         let present_start = std::time::Instant::now();
-        println!(
+        log!(
             "Presenting launcher window ({:.3}ms)",
             present_start.elapsed().as_secs_f64() * 1000.0
         );
@@ -451,7 +451,7 @@ fn select_previous(list: &ListBox) {
 fn launch_application(app: &AppEntry, search_entry: &SearchEntry) -> bool {
     match app.entry_type {
         EntryType::Application => {
-            println!("Launching application: {}", app.name);
+            log!("Launching application: {}", app.name);
             let exec = app
                 .exec
                 .replace("%f", "")
@@ -469,7 +469,7 @@ fn launch_application(app: &AppEntry, search_entry: &SearchEntry) -> bool {
         }
         EntryType::File => {
             if app.icon_name == "folder" {
-                println!("Opening folder: {}", app.path);
+                log!("Opening folder: {}", app.path);
                 let path = if app.path.ends_with('/') {
                     app.path.clone()
                 } else {
@@ -480,7 +480,7 @@ fn launch_application(app: &AppEntry, search_entry: &SearchEntry) -> bool {
 
                 false
             } else {
-                println!("Opening file: {}", app.path);
+                log!("Opening file: {}", app.path);
                 Command::new("sh").arg("-c").arg(&app.exec).spawn().is_ok()
             }
         }

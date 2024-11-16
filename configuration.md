@@ -59,7 +59,8 @@ The configuration file controls the appearance and behavior of the launcher wind
     }
   },
   "debug": {
-    "disable_auto_focus": false  // Disable automatic keyboard focus
+    "disable_auto_focus": false,  // Disable automatic keyboard focus
+    "enable_logging": false       // Enable application logging
   }
 }
 ```
