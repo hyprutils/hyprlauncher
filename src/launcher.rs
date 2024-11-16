@@ -136,37 +136,28 @@ pub async fn load_applications() {
 
 #[inline]
 fn parse_desktop_entry(path: &std::path::Path) -> Option<AppEntry> {
-    let contents = fs::read_to_string(path).ok()?;
-    let path_str = path.to_string_lossy();
+    let entry = freedesktop_entry_parser::parse_entry(path).ok()?;
+    let section = entry.section("Desktop Entry");
 
-    let mut name = None;
-    let mut exec = None;
-    let mut icon = None;
-    let mut desc = None;
-
-    for line in contents.lines() {
-        match line.get(..=4)? {
-            "Name=" => name = Some(line[5..].to_string()),
-            "Exec=" => exec = Some(line[5..].to_string()),
-            "Icon=" => icon = Some(line[5..].to_string()),
-            _ if line.starts_with("Comment=") || line.starts_with("GenericName=") => {
-                desc = Some(line.split_once('=').map(|x| x.1).unwrap_or("").to_string())
-            }
-            _ => continue,
-        }
-
-        if name.is_some() && exec.is_some() && icon.is_some() && desc.is_some() {
-            break;
-        }
+    if section.attr("NoDisplay").map_or(false, |v| v == "true") {
+        return None;
     }
 
-    name.map(|name| AppEntry {
+    let name = section.attr("Name")?;
+    let exec = section.attr("Exec").unwrap_or_default();
+    let icon = section.attr("Icon").unwrap_or("application-x-executable");
+    let desc = section
+        .attr("Comment")
+        .or_else(|| section.attr("GenericName"))
+        .unwrap_or("");
+
+    Some(AppEntry {
         name_lowercase: name.to_lowercase(),
-        name,
-        exec: exec.unwrap_or_default(),
-        icon_name: icon.unwrap_or_else(|| "application-x-executable".to_string()),
-        description: desc.unwrap_or_default(),
-        path: path_str.into_owned(),
+        name: name.to_string(),
+        exec: exec.to_string(),
+        icon_name: icon.to_string(),
+        description: desc.to_string(),
+        path: path.to_string_lossy().into_owned(),
         launch_count: 0,
         entry_type: EntryType::Application,
         score_boost: 0,
