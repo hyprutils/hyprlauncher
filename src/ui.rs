@@ -204,8 +204,8 @@ impl LauncherWindow {
         let search_entry_for_window = self.search_entry.clone();
 
         let window_controller = gtk4::EventControllerKey::new();
+        let config = Config::load();
         window_controller.connect_key_pressed(move |_, key, _, _| {
-            let config = Config::load();
             let results_list = results_list_for_window.clone();
             let window = window_for_window.clone();
             let search_entry = search_entry_for_window.clone();
