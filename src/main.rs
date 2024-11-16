@@ -9,7 +9,7 @@ use app::App;
 #[macro_export]
 macro_rules! log {
     ($($arg:tt)*) => {{
-        if crate::config::LOGGING_ENABLED.load(std::sync::atomic::Ordering::SeqCst) {
+        if $crate::config::LOGGING_ENABLED.load(std::sync::atomic::Ordering::SeqCst) {
             println!($($arg)*);
         }
     }};

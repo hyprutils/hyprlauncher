@@ -201,19 +201,12 @@ impl Default for Window {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
 pub struct Debug {
     pub disable_auto_focus: bool,
     pub enable_logging: bool,
 }
 
-impl Default for Debug {
-    fn default() -> Self {
-        Self {
-            disable_auto_focus: false,
-            enable_logging: false,
-        }
-    }
-}
 
 impl Config {
     fn config_dir() -> &'static PathBuf {
