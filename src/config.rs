@@ -228,23 +228,33 @@ impl Config {
                     e.line(),
                     e.column()
                 );
-                println!("Using default configuration");
+                println!("Attempting to merge partial configuration");
+                match serde_json::from_str::<serde_json::Value>(&file_contents) {
+                    Ok(partial_config) => partial_config,
+                    Err(_) => {
+                        println!("Unable to parse partial config, using defaults");
+                        return default_config;
+                    }
+                }
+            }
+        };
+
+        let default_json = match serde_json::to_value(&default_config) {
+            Ok(json) => json,
+            Err(e) => {
+                println!("Error converting default config to JSON: {}", e);
                 return default_config;
             }
         };
 
-        let merged_config = if let Ok(contents) = serde_json::to_string(&default_config) {
-            let default_json: serde_json::Value = match serde_json::from_str(&contents) {
-                Ok(json) => json,
-                Err(e) => {
-                    println!("Error parsing default config: {}", e);
-                    return default_config;
-                }
-            };
-            merge_json(existing_config, default_json.clone(), &default_json)
-        } else {
-            existing_config
-        };
+        let merged_config = merge_json(existing_config, default_json.clone(), &default_json);
+
+        if let Ok(pretty_merged) = serde_json::to_string_pretty(&merged_config) {
+            if pretty_merged != file_contents {
+                println!("Writing merged configuration back to file");
+                fs::write(&config_file, pretty_merged).unwrap_or_default();
+            }
+        }
 
         match serde_json::from_value(merged_config.clone()) {
             Ok(config) => config,
