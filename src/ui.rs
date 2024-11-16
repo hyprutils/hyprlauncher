@@ -20,6 +20,7 @@ pub struct LauncherWindow {
     results_list: ListBox,
     app_data_store: Rc<RefCell<Vec<AppEntry>>>,
     rt: Handle,
+    config: Rc<Config>,
 }
 
 #[allow(non_camel_case_types)]
@@ -38,7 +39,7 @@ impl LauncherWindow {
             search_start.elapsed().as_secs_f64() * 1000.0
         );
 
-        let config = Config::load();
+        let config = Rc::new(Config::load());
         let window = ApplicationWindow::builder()
             .application(app)
             .title("HyprLauncher")
@@ -89,7 +90,7 @@ impl LauncherWindow {
 
         let app_data_store = Rc::new(RefCell::new(Vec::with_capacity(50)));
 
-        update_results_list(&results_list, initial_results, &app_data_store);
+        update_results_list(&results_list, initial_results, &app_data_store, &config);
 
         let launcher = Self {
             window,
@@ -97,6 +98,7 @@ impl LauncherWindow {
             results_list,
             app_data_store,
             rt: rt.clone(),
+            config: config.clone(),
         };
 
         launcher.setup_signals();
@@ -164,18 +166,20 @@ impl LauncherWindow {
             let app_data_store_for_search = self.app_data_store.clone();
             let rt_handle = self.rt.clone();
 
+            let config = self.config.clone();
             self.search_entry.connect_changed(move |entry| {
                 let query = entry.text().to_string();
                 let results_list = results_list_for_search.clone();
                 let app_data_store = app_data_store_for_search.clone();
                 let rt_handle = rt_handle.clone();
+                let config = config.clone();
 
                 glib::MainContext::default().spawn_local(async move {
                     let results = rt_handle
                         .spawn(async move { search::search_applications(&query).await })
                         .await
                         .unwrap_or_default();
-                    update_results_list(&results_list, results, &app_data_store);
+                    update_results_list(&results_list, results, &app_data_store, &config);
                 });
             });
 
@@ -204,7 +208,7 @@ impl LauncherWindow {
         let search_entry_for_window = self.search_entry.clone();
 
         let window_controller = gtk4::EventControllerKey::new();
-        let config = Config::load();
+        let config = self.config.clone();
         window_controller.connect_key_pressed(move |_, key, _, _| {
             let results_list = results_list_for_window.clone();
             let window = window_for_window.clone();
@@ -326,6 +330,7 @@ fn update_results_list(
     list: &ListBox,
     results: Vec<search::SearchResult>,
     store: &Rc<RefCell<Vec<AppEntry>>>,
+    config: &Config,
 ) {
     while let Some(child) = list.first_child() {
         list.remove(&child);
@@ -354,9 +359,8 @@ fn update_results_list(
     let mut rows = Vec::with_capacity(results.len());
     store.extend(results.iter().map(|r| r.app.clone()));
 
-    let config = Config::load();
     for result in results {
-        rows.push(create_result_row(&result.app, &config));
+        rows.push(create_result_row(&result.app, config));
     }
 
     for row in rows {
