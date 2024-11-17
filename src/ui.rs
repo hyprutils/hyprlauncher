@@ -141,27 +141,54 @@ impl LauncherWindow {
                     name_label.set_text(app_entry.imp().name());
 
                     if config.window.show_descriptions {
-                        if let Some(desc_label) = text_box
+                        let desc = app_entry.imp().description();
+                        if !desc.is_empty() {
+                            if let Some(desc_label) = text_box
+                                .first_child()
+                                .and_then(|w| w.next_sibling())
+                                .and_downcast::<Label>()
+                            {
+                                desc_label.set_text(desc);
+                                desc_label.set_visible(true);
+                            }
+                        } else if let Some(desc_label) = text_box
                             .first_child()
                             .and_then(|w| w.next_sibling())
                             .and_downcast::<Label>()
                         {
-                            desc_label.set_text(app_entry.imp().description());
+                            desc_label.set_visible(false);
                         }
                     }
 
                     if config.window.show_paths {
-                        let path_label = if config.window.show_descriptions {
-                            text_box
-                                .first_child()
-                                .and_then(|w| w.next_sibling())
-                                .and_then(|w| w.next_sibling())
-                        } else {
-                            text_box.first_child().and_then(|w| w.next_sibling())
-                        };
+                        let path = app_entry.imp().path();
+                        if !path.is_empty() {
+                            let path_label = if config.window.show_descriptions {
+                                text_box
+                                    .first_child()
+                                    .and_then(|w| w.next_sibling())
+                                    .and_then(|w| w.next_sibling())
+                            } else {
+                                text_box.first_child().and_then(|w| w.next_sibling())
+                            };
 
-                        if let Some(path_label) = path_label.and_downcast::<Label>() {
-                            path_label.set_text(app_entry.imp().path());
+                            if let Some(path_label) = path_label.and_downcast::<Label>() {
+                                path_label.set_text(path);
+                                path_label.set_visible(true);
+                            }
+                        } else {
+                            let path_label = if config.window.show_descriptions {
+                                text_box
+                                    .first_child()
+                                    .and_then(|w| w.next_sibling())
+                                    .and_then(|w| w.next_sibling())
+                            } else {
+                                text_box.first_child().and_then(|w| w.next_sibling())
+                            };
+
+                            if let Some(path_label) = path_label.and_downcast::<Label>() {
+                                path_label.set_visible(false);
+                            }
                         }
                     }
                 }
