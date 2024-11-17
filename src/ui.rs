@@ -344,29 +344,33 @@ impl LauncherWindow {
             let window = window_for_window.clone();
             let search_entry = search_entry_for_window.clone();
 
-            match key {
-                Key::Escape => {
-                    search_entry.set_text("");
-                    window.hide();
-                    glib::Propagation::Stop
-                }
-                Key::slash if config.window.show_search => {
-                    search_entry.grab_focus();
-                    glib::Propagation::Stop
-                }
-                Key::Up | Key::k if config.window.vim_keys || key == Key::Up => {
-                    if !search_entry.has_focus() {
+            match key.name().as_deref() {
+                Some(key_name) => {
+                    if key_name == config.window.custom_navigate_keys.up {
                         select_previous(&list_view);
-                    }
-                    glib::Propagation::Stop
-                }
-                Key::Down | Key::j if config.window.vim_keys || key == Key::Down => {
-                    if !search_entry.has_focus() {
+                        glib::Propagation::Stop
+                    } else if key_name == config.window.custom_navigate_keys.down {
                         select_next(&list_view);
+                        glib::Propagation::Stop
+                    } else if key_name == config.window.custom_navigate_keys.delete_word {
+                        let text = search_entry.text();
+                        let cursor_pos = search_entry.position() as usize;
+                        if let Some((new_text, new_pos)) = delete_word(&text, cursor_pos) {
+                            search_entry.set_text(&new_text);
+                            search_entry.set_position(new_pos as i32);
+                        }
+                        glib::Propagation::Stop
+                    } else {
+                        match key {
+                            Key::Escape => {
+                                window.hide();
+                                glib::Propagation::Stop
+                            }
+                            _ => glib::Propagation::Proceed,
+                        }
                     }
-                    glib::Propagation::Stop
                 }
-                _ => glib::Propagation::Proceed,
+                None => glib::Propagation::Proceed,
             }
         });
         self.window.add_controller(window_controller);
@@ -652,4 +656,28 @@ fn get_selected_item(list_view: &ListView) -> Option<AppEntryObject> {
                 .and_then(|model| model.item(position))
                 .and_downcast::<AppEntryObject>()
         })
+}
+
+fn delete_word(text: &str, cursor_pos: usize) -> Option<(String, usize)> {
+    if text.is_empty() || cursor_pos == 0 {
+        return None;
+    }
+
+    let mut chars: Vec<char> = text.chars().collect();
+    let mut new_pos = cursor_pos;
+
+    while new_pos > 0 && chars[new_pos - 1].is_whitespace() {
+        new_pos -= 1;
+    }
+
+    while new_pos > 0 && !chars[new_pos - 1].is_whitespace() {
+        new_pos -= 1;
+    }
+
+    chars.drain(new_pos..cursor_pos);
+    let result: String = chars.into_iter().collect();
+    let trimmed = result.trim_end().to_string();
+    let new_pos = new_pos.min(trimmed.len());
+
+    Some((trimmed, new_pos))
 }
