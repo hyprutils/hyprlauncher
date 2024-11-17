@@ -11,7 +11,7 @@ use gtk4::{
     subclass::prelude::*,
     Application, ApplicationWindow, Box as GtkBox, CssProvider, Label, ListView, Orientation,
     ScrolledWindow, SearchEntry, SignalListItemFactory, SingleSelection,
-    STYLE_PROVIDER_PRIORITY_APPLICATION,
+    STYLE_PROVIDER_PRIORITY_USER,
 };
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 use std::{cell::RefCell, process::Command, rc::Rc};
@@ -213,7 +213,7 @@ impl LauncherWindow {
             gtk4::style_context_add_provider_for_display(
                 &native.display(),
                 &css_provider,
-                STYLE_PROVIDER_PRIORITY_APPLICATION,
+                STYLE_PROVIDER_PRIORITY_USER,
             );
         }
         log!(
@@ -429,7 +429,7 @@ impl LauncherWindow {
             gtk4::style_context_add_provider_for_display(
                 &native.display(),
                 &css_provider,
-                STYLE_PROVIDER_PRIORITY_APPLICATION,
+                STYLE_PROVIDER_PRIORITY_USER,
             );
         }
 
