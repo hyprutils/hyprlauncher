@@ -440,22 +440,22 @@ fn update_results_list(
 ) {
     if let Some(selection_model) = list_view.model().and_downcast::<SingleSelection>() {
         if let Some(model) = selection_model.model().and_downcast::<gio::ListStore>() {
-            model.remove_all();
+            let config = Config::load();
+            let max_entries = config.window.max_entries;
             let mut store = store.borrow_mut();
+            
+            model.remove_all();
             store.clear();
-            store.reserve(50);
+            store.reserve(max_entries);
 
-            let results = if results.len() > 50 {
-                &results[..50]
+            let results = if results.len() > max_entries {
+                &results[..max_entries]
             } else {
                 &results
             };
 
             store.extend(results.iter().map(|r| r.app.clone()));
-
-            for result in results {
-                model.append(&AppEntryObject::new(result.app.clone()));
-            }
+            model.extend_from_slice(&results.iter().map(|r| AppEntryObject::new(r.app.clone())).collect::<Vec<_>>());
         }
     }
 }
