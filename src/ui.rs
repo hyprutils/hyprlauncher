@@ -68,6 +68,7 @@ impl LauncherWindow {
         let list_view = ListView::new(Some(selection_model.clone()), Some(factory.clone()));
 
         factory.connect_setup(move |_, list_item| {
+            let config = Config::load();
             let box_row = GtkBox::builder()
                 .orientation(Orientation::Horizontal)
                 .spacing(12)
@@ -77,9 +78,12 @@ impl LauncherWindow {
                 .margin_bottom(6)
                 .build();
 
-            let icon = gtk4::Image::builder()
-                .icon_size(gtk4::IconSize::Large)
-                .build();
+            if config.window.show_icons {
+                let icon = gtk4::Image::builder()
+                    .icon_size(gtk4::IconSize::Large)
+                    .build();
+                box_row.append(&icon);
+            }
 
             let text_box = GtkBox::builder()
                 .orientation(Orientation::Vertical)
@@ -87,52 +91,69 @@ impl LauncherWindow {
                 .build();
 
             let name_label = Label::new(None);
-            let desc_label = Label::new(None);
-            let path_label = Label::new(None);
-
+            name_label.add_css_class("app-name");
             text_box.append(&name_label);
-            text_box.append(&desc_label);
-            text_box.append(&path_label);
 
-            box_row.append(&icon);
+            if config.window.show_descriptions {
+                let desc_label = Label::new(None);
+                desc_label.add_css_class("app-description");
+                text_box.append(&desc_label);
+            }
+
+            if config.window.show_paths {
+                let path_label = Label::new(None);
+                path_label.add_css_class("app-path");
+                text_box.append(&path_label);
+            }
+
             box_row.append(&text_box);
             list_item.set_child(Some(&box_row));
         });
 
         factory.connect_bind(move |_, list_item| {
+            let config = Config::load();
             if let Some(app_entry) = list_item.item().and_downcast::<AppEntryObject>() {
                 if let Some(box_row) = list_item.child().and_downcast::<GtkBox>() {
-                    if let Some(icon) = box_row.first_child().and_downcast::<gtk4::Image>() {
-                        icon.set_icon_name(Some(&app_entry.imp().icon_name()));
+                    if config.window.show_icons {
+                        if let Some(icon) = box_row.first_child().and_downcast::<gtk4::Image>() {
+                            icon.set_icon_name(Some(&app_entry.imp().icon_name()));
+                        }
                     }
-                    let name_label = box_row
-                        .first_child()
-                        .and_then(|w| w.next_sibling())
-                        .and_then(|w| w.downcast::<GtkBox>().ok())
-                        .and_then(|w| w.first_child().and_downcast::<Label>())
-                        .expect("First child has to be a Label");
 
+                    let text_box = box_row
+                        .last_child()
+                        .and_downcast::<GtkBox>()
+                        .expect("Last child must be a GtkBox");
+
+                    let name_label = text_box
+                        .first_child()
+                        .and_downcast::<Label>()
+                        .expect("First child must be a Label");
                     name_label.set_text(app_entry.imp().name());
 
-                    if let Some(desc_label) = box_row
-                        .first_child()
-                        .and_then(|w| w.next_sibling())
-                        .and_then(|w| w.next_sibling())
-                        .and_then(|w| w.downcast::<GtkBox>().ok())
-                        .and_then(|w| w.first_child().and_downcast::<Label>())
-                    {
-                        desc_label.set_text(app_entry.imp().description());
+                    if config.window.show_descriptions {
+                        if let Some(desc_label) = text_box
+                            .first_child()
+                            .and_then(|w| w.next_sibling())
+                            .and_downcast::<Label>()
+                        {
+                            desc_label.set_text(app_entry.imp().description());
+                        }
                     }
 
-                    if let Some(path_label) = box_row
-                        .first_child()
-                        .and_then(|w| w.next_sibling())
-                        .and_then(|w| w.next_sibling())
-                        .and_then(|w| w.next_sibling())
-                        .and_then(|w| w.downcast::<GtkBox>().ok())
-                        .and_then(|w| w.first_child().and_downcast::<Label>())
-                    {
-                        path_label.set_text(app_entry.imp().path());
+                    if config.window.show_paths {
+                        let path_label = if config.window.show_descriptions {
+                            text_box
+                                .first_child()
+                                .and_then(|w| w.next_sibling())
+                                .and_then(|w| w.next_sibling())
+                        } else {
+                            text_box.first_child().and_then(|w| w.next_sibling())
+                        };
+
+                        if let Some(path_label) = path_label.and_downcast::<Label>() {
+                            path_label.set_text(app_entry.imp().path());
+                        }
                     }
                 }
             }
@@ -386,6 +407,25 @@ impl LauncherWindow {
                         search_entry.set_text("");
                     } else {
                         search_entry.set_visible(false);
+                    }
+                }
+
+                if let Some(scrolled) = main_box.last_child().and_downcast::<ScrolledWindow>() {
+                    if let Some(list_view) = scrolled.child().and_downcast::<ListView>() {
+                        if let Some(selection_model) =
+                            list_view.model().and_downcast::<SingleSelection>()
+                        {
+                            if let Some(model) =
+                                selection_model.model().and_downcast::<gio::ListStore>()
+                            {
+                                let items: Vec<_> =
+                                    (0..model.n_items()).filter_map(|i| model.item(i)).collect();
+                                model.remove_all();
+                                for item in items {
+                                    model.append(&item);
+                                }
+                            }
+                        }
                     }
                 }
             }
