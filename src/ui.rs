@@ -425,9 +425,10 @@ fn select_next(list_view: &ListView) {
         let n_items = selection_model.n_items();
         let current_pos = selection_model.selected();
         if current_pos < n_items - 1 {
-            selection_model.set_selected(current_pos + 1);
+            let next_pos = current_pos + 1;
+            selection_model.set_selected(next_pos);
             list_view
-                .activate_action("list.scroll-to-item", Some(&current_pos.to_variant()))
+                .activate_action("list.scroll-to-item", Some(&next_pos.to_variant()))
                 .unwrap_or_default();
         }
     }
@@ -437,9 +438,10 @@ fn select_previous(list_view: &ListView) {
     if let Some(selection_model) = list_view.model().and_downcast::<SingleSelection>() {
         let current_pos = selection_model.selected();
         if current_pos > 0 {
-            selection_model.set_selected(current_pos - 1);
+            let prev_pos = current_pos - 1;
+            selection_model.set_selected(prev_pos);
             list_view
-                .activate_action("list.scroll-to-item", Some(&current_pos.to_variant()))
+                .activate_action("list.scroll-to-item", Some(&prev_pos.to_variant()))
                 .unwrap_or_default();
         }
     }
