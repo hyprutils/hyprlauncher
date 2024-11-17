@@ -90,24 +90,18 @@ impl LauncherWindow {
                 .spacing(3)
                 .build();
 
-            let name_label = Label::builder()
-                .halign(gtk4::Align::Start)
-                .build();
+            let name_label = Label::builder().halign(gtk4::Align::Start).build();
             name_label.add_css_class("app-name");
             text_box.append(&name_label);
 
             if config.window.show_descriptions {
-                let desc_label = Label::builder()
-                    .halign(gtk4::Align::Start)
-                    .build();
+                let desc_label = Label::builder().halign(gtk4::Align::Start).build();
                 desc_label.add_css_class("app-description");
                 text_box.append(&desc_label);
             }
 
             if config.window.show_paths {
-                let path_label = Label::builder()
-                    .halign(gtk4::Align::Start)
-                    .build();
+                let path_label = Label::builder().halign(gtk4::Align::Start).build();
                 path_label.add_css_class("app-path");
                 text_box.append(&path_label);
             }
