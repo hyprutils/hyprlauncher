@@ -67,6 +67,7 @@ pub struct Colors {
     pub item_name: String,
     pub item_description: String,
     pub item_path: String,
+    pub border: String,
 }
 
 impl Default for Colors {
@@ -83,6 +84,7 @@ impl Default for Colors {
             item_name: String::from("#ffffff"),
             item_description: String::from("#a0a0a0"),
             item_path: String::from("#808080"),
+            border: String::from("#333333"),
         }
     }
 }
@@ -173,7 +175,6 @@ pub struct Window {
     pub custom_navigate_keys: NavigateKeys,
     pub show_border: bool,
     pub border_width: i32,
-    pub border_color: String,
     pub use_gtk_colors: bool,
     pub max_entries: usize,
 }
@@ -195,7 +196,6 @@ impl Default for Window {
             margin_right: 0,
             show_border: true,
             border_width: 2,
-            border_color: String::from("#333333"),
             use_gtk_colors: false,
             max_entries: 50,
         }
@@ -316,7 +316,7 @@ impl Config {
             } else {
                 format!(
                     "border: {}px solid {};",
-                    window.border_width, window.border_color
+                    window.border_width, theme.colors.border
                 )
             }
         } else {
