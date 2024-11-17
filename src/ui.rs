@@ -507,6 +507,9 @@ fn update_results_list(
 fn select_next(list_view: &ListView) {
     if let Some(selection_model) = list_view.model().and_downcast::<SingleSelection>() {
         let n_items = selection_model.n_items();
+        if n_items == 0 {
+            return;
+        }
         let current_pos = selection_model.selected();
         if current_pos < n_items - 1 {
             let next_pos = current_pos + 1;
@@ -520,6 +523,10 @@ fn select_next(list_view: &ListView) {
 
 fn select_previous(list_view: &ListView) {
     if let Some(selection_model) = list_view.model().and_downcast::<SingleSelection>() {
+        let n_items = selection_model.n_items();
+        if n_items == 0 {
+            return;
+        }
         let current_pos = selection_model.selected();
         if current_pos > 0 {
             let prev_pos = current_pos - 1;
