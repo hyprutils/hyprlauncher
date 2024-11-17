@@ -31,7 +31,7 @@ The configuration file controls the appearance and behavior of the launcher wind
   },
   "theme": {
     "colors": {
-      "border": "#333333",        // Border color in hex format
+      "border": "#333333",              // Border color in hex format
       "window_bg": "#0f0f0f",           // Window background color
       "search_bg": "#1f1f1f",           // Search bar background color
       "search_bg_focused": "#282828",   // Search bar background color when focused
