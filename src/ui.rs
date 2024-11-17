@@ -256,13 +256,11 @@ impl LauncherWindow {
                 });
             });
 
-            let list_view_for_search_key = self.list_view.clone();
             let window_for_search = self.window.clone();
             let search_entry_for_search = self.search_entry.clone();
             let search_controller = gtk4::EventControllerKey::new();
 
             search_controller.connect_key_pressed(move |_, key, _, _| {
-                let list_view = list_view_for_search_key.clone();
                 let window = window_for_search.clone();
                 let search_entry = search_entry_for_search.clone();
                 
