@@ -443,7 +443,7 @@ fn update_results_list(
             let config = Config::load();
             let max_entries = config.window.max_entries;
             let mut store = store.borrow_mut();
-            
+
             model.remove_all();
             store.clear();
             store.reserve(max_entries);
@@ -455,7 +455,12 @@ fn update_results_list(
             };
 
             store.extend(results.iter().map(|r| r.app.clone()));
-            model.extend_from_slice(&results.iter().map(|r| AppEntryObject::new(r.app.clone())).collect::<Vec<_>>());
+            model.extend_from_slice(
+                &results
+                    .iter()
+                    .map(|r| AppEntryObject::new(r.app.clone()))
+                    .collect::<Vec<_>>(),
+            );
         }
     }
 }
