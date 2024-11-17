@@ -263,7 +263,7 @@ impl LauncherWindow {
             search_controller.connect_key_pressed(move |_, key, _, _| {
                 let window = window_for_search.clone();
                 let search_entry = search_entry_for_search.clone();
-                
+
                 match key {
                     Key::Escape => {
                         search_entry.set_text("");
@@ -426,6 +426,9 @@ fn select_next(list_view: &ListView) {
         let current_pos = selection_model.selected();
         if current_pos < n_items - 1 {
             selection_model.set_selected(current_pos + 1);
+            list_view
+                .activate_action("list.scroll-to-item", Some(&current_pos.to_variant()))
+                .unwrap_or_default();
         }
     }
 }
@@ -435,6 +438,9 @@ fn select_previous(list_view: &ListView) {
         let current_pos = selection_model.selected();
         if current_pos > 0 {
             selection_model.set_selected(current_pos - 1);
+            list_view
+                .activate_action("list.scroll-to-item", Some(&current_pos.to_variant()))
+                .unwrap_or_default();
         }
     }
 }
