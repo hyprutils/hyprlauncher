@@ -175,6 +175,7 @@ pub struct Window {
     pub border_width: i32,
     pub border_color: String,
     pub use_gtk_colors: bool,
+    pub max_entries: usize,
 }
 
 impl Default for Window {
@@ -196,6 +197,7 @@ impl Default for Window {
             border_width: 2,
             border_color: String::from("#333333"),
             use_gtk_colors: false,
+            max_entries: 50,
         }
     }
 }

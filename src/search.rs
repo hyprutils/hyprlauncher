@@ -1,4 +1,7 @@
-use crate::launcher::{self, AppEntry, EntryType, APP_CACHE};
+use crate::{
+    config::Config,
+    launcher::{self, AppEntry, EntryType, APP_CACHE},
+};
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use std::{os::unix::fs::PermissionsExt, path::PathBuf};
 use tokio::sync::oneshot;
@@ -8,9 +11,10 @@ pub struct SearchResult {
     pub score: i64,
 }
 
-pub async fn search_applications(query: &str) -> Vec<SearchResult> {
+pub async fn search_applications(query: &str, config: &Config) -> Vec<SearchResult> {
     let (tx, rx) = oneshot::channel();
     let query = query.to_lowercase();
+    let max_results = config.window.max_entries;
 
     tokio::task::spawn_blocking(move || {
         let cache = APP_CACHE.blocking_read();
@@ -19,8 +23,7 @@ pub async fn search_applications(query: &str) -> Vec<SearchResult> {
             Some('~' | '$' | '/') => handle_path_search(&query),
 
             None => {
-                let mut results = Vec::with_capacity(50);
-
+                let mut results = Vec::with_capacity(max_results);
                 for app in cache.values() {
                     if app.path.ends_with(".desktop") {
                         results.push(SearchResult {
@@ -28,37 +31,37 @@ pub async fn search_applications(query: &str) -> Vec<SearchResult> {
                             app: app.clone(),
                         });
 
-                        if results.len() >= 50 {
+                        if results.len() >= max_results {
                             break;
                         }
                     }
                 }
-
                 results.sort_unstable_by_key(|item| -item.score);
                 results
             }
 
             Some(_) => {
                 let matcher = SkimMatcherV2::default().smart_case();
-                let mut results = Vec::with_capacity(50);
+                let mut results = Vec::with_capacity(max_results);
                 let mut seen_names = std::collections::HashSet::new();
 
                 for app in cache.values() {
-                    if app.name_lowercase == query {
+                    let name_lower = app.name.to_lowercase();
+                    if name_lower == query {
                         results.push(SearchResult {
                             app: app.clone(),
                             score: 10000 + calculate_bonus_score(app),
                         });
-                        seen_names.insert(&app.name_lowercase);
+                        seen_names.insert(name_lower);
                         continue;
                     }
 
-                    if let Some(score) = matcher.fuzzy_match(&app.name_lowercase, &query) {
+                    if let Some(score) = matcher.fuzzy_match(&name_lower, &query) {
                         results.push(SearchResult {
                             app: app.clone(),
                             score: score + calculate_bonus_score(app),
                         });
-                        seen_names.insert(&app.name_lowercase);
+                        seen_names.insert(name_lower);
                     }
                 }
 
@@ -69,8 +72,8 @@ pub async fn search_applications(query: &str) -> Vec<SearchResult> {
                 }
 
                 results.sort_unstable_by_key(|item| -item.score);
-                if results.len() > 50 {
-                    results.truncate(50);
+                if results.len() > max_results {
+                    results.truncate(max_results);
                 }
                 results
             }
@@ -106,15 +109,14 @@ fn check_binary(query: &str) -> Option<SearchResult> {
         .map(|_| SearchResult {
             app: AppEntry {
                 name: query.to_string(),
-                name_lowercase: query.to_lowercase(),
+                description: String::new(),
+                path: bin_path.clone(),
                 exec: if parts.len() > 1 {
                     format!("{} {}", bin_path, parts[1..].join(" "))
                 } else {
-                    bin_path.clone()
+                    bin_path
                 },
                 icon_name: String::from("application-x-executable"),
-                description: String::new(),
-                path: bin_path,
                 launch_count: 0,
                 entry_type: EntryType::File,
                 score_boost: 3000,

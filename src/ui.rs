@@ -5,10 +5,13 @@ use crate::{
 };
 use gtk4::{
     gdk::Key,
+    gio,
     glib::{self},
     prelude::*,
-    Application, ApplicationWindow, Box as GtkBox, CssProvider, Label, ListBox, ListBoxRow,
-    Orientation, ScrolledWindow, SearchEntry, STYLE_PROVIDER_PRIORITY_APPLICATION,
+    subclass::prelude::*,
+    Application, ApplicationWindow, Box as GtkBox, CssProvider, Label, ListView, Orientation,
+    ScrolledWindow, SearchEntry, SignalListItemFactory, SingleSelection,
+    STYLE_PROVIDER_PRIORITY_APPLICATION,
 };
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 use std::{cell::RefCell, process::Command, rc::Rc};
@@ -17,12 +20,11 @@ use tokio::runtime::Handle;
 pub struct LauncherWindow {
     window: ApplicationWindow,
     search_entry: SearchEntry,
-    results_list: ListBox,
+    list_view: ListView,
     app_data_store: Rc<RefCell<Vec<AppEntry>>>,
     rt: Handle,
 }
 
-#[allow(non_camel_case_types)]
 impl LauncherWindow {
     pub fn new(app: &Application, rt: Handle) -> Self {
         let window_start = std::time::Instant::now();
@@ -32,13 +34,13 @@ impl LauncherWindow {
         );
 
         let search_start = std::time::Instant::now();
-        let initial_results = rt.block_on(async { search::search_applications("").await });
+        let config = Config::load();
+        let initial_results = rt.block_on(async { search::search_applications("", &config).await });
         log!(
             "Initial search population ({:.3}ms)",
             search_start.elapsed().as_secs_f64() * 1000.0
         );
 
-        let config = Config::load();
         let window = ApplicationWindow::builder()
             .application(app)
             .title("HyprLauncher")
@@ -59,13 +61,88 @@ impl LauncherWindow {
         let main_box = GtkBox::new(Orientation::Vertical, 0);
         let search_entry = SearchEntry::new();
         let scrolled = ScrolledWindow::new();
-        let results_list = ListBox::new();
+
+        let model = gio::ListStore::new::<AppEntryObject>();
+        let selection_model = SingleSelection::new(Some(model.clone()));
+        let factory = SignalListItemFactory::new();
+        let list_view = ListView::new(Some(selection_model.clone()), Some(factory.clone()));
+
+        factory.connect_setup(move |_, list_item| {
+            let box_row = GtkBox::builder()
+                .orientation(Orientation::Horizontal)
+                .spacing(12)
+                .margin_start(12)
+                .margin_end(12)
+                .margin_top(6)
+                .margin_bottom(6)
+                .build();
+
+            let icon = gtk4::Image::builder()
+                .icon_size(gtk4::IconSize::Large)
+                .build();
+
+            let text_box = GtkBox::builder()
+                .orientation(Orientation::Vertical)
+                .spacing(3)
+                .build();
+
+            let name_label = Label::new(None);
+            let desc_label = Label::new(None);
+            let path_label = Label::new(None);
+
+            text_box.append(&name_label);
+            text_box.append(&desc_label);
+            text_box.append(&path_label);
+
+            box_row.append(&icon);
+            box_row.append(&text_box);
+            list_item.set_child(Some(&box_row));
+        });
+
+        factory.connect_bind(move |_, list_item| {
+            if let Some(app_entry) = list_item.item().and_downcast::<AppEntryObject>() {
+                if let Some(box_row) = list_item.child().and_downcast::<GtkBox>() {
+                    if let Some(icon) = box_row.first_child().and_downcast::<gtk4::Image>() {
+                        icon.set_icon_name(Some(&app_entry.imp().icon_name()));
+                    }
+                    let name_label = box_row
+                        .first_child()
+                        .and_then(|w| w.next_sibling())
+                        .and_then(|w| w.downcast::<GtkBox>().ok())
+                        .and_then(|w| w.first_child().and_downcast::<Label>())
+                        .expect("First child has to be a Label");
+
+                    name_label.set_text(app_entry.imp().name());
+
+                    if let Some(desc_label) = box_row
+                        .first_child()
+                        .and_then(|w| w.next_sibling())
+                        .and_then(|w| w.next_sibling())
+                        .and_then(|w| w.downcast::<GtkBox>().ok())
+                        .and_then(|w| w.first_child().and_downcast::<Label>())
+                    {
+                        desc_label.set_text(app_entry.imp().description());
+                    }
+
+                    if let Some(path_label) = box_row
+                        .first_child()
+                        .and_then(|w| w.next_sibling())
+                        .and_then(|w| w.next_sibling())
+                        .and_then(|w| w.next_sibling())
+                        .and_then(|w| w.downcast::<GtkBox>().ok())
+                        .and_then(|w| w.first_child().and_downcast::<Label>())
+                    {
+                        path_label.set_text(app_entry.imp().path());
+                    }
+                }
+            }
+        });
 
         scrolled.set_vexpand(true);
         scrolled.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::External);
-        results_list.set_selection_mode(gtk4::SelectionMode::Single);
+        list_view.set_single_click_activate(true);
 
-        scrolled.set_child(Some(&results_list));
+        scrolled.set_child(Some(&list_view));
         if config.window.show_search {
             main_box.append(&search_entry);
         }
@@ -88,13 +165,12 @@ impl LauncherWindow {
         );
 
         let app_data_store = Rc::new(RefCell::new(Vec::with_capacity(50)));
-
-        update_results_list(&results_list, initial_results, &app_data_store);
+        update_results_list(&list_view, initial_results, &app_data_store);
 
         let launcher = Self {
             window,
             search_entry,
-            results_list,
+            list_view,
             app_data_store,
             rt: rt.clone(),
         };
@@ -160,35 +236,37 @@ impl LauncherWindow {
 
             search_entry_for_controller.add_controller(focus_controller);
 
-            let results_list_for_search = self.results_list.clone();
+            let list_view_for_search = self.list_view.clone();
             let app_data_store_for_search = self.app_data_store.clone();
             let rt_handle = self.rt.clone();
 
             self.search_entry.connect_changed(move |entry| {
                 let query = entry.text().to_string();
-                let results_list = results_list_for_search.clone();
+                let list_view = list_view_for_search.clone();
                 let app_data_store = app_data_store_for_search.clone();
                 let rt_handle = rt_handle.clone();
 
                 glib::MainContext::default().spawn_local(async move {
+                    let config = Config::load();
                     let results = rt_handle
-                        .spawn(async move { search::search_applications(&query).await })
+                        .spawn(async move { search::search_applications(&query, &config).await })
                         .await
                         .unwrap_or_default();
-                    update_results_list(&results_list, results, &app_data_store);
+                    update_results_list(&list_view, results, &app_data_store);
                 });
             });
 
-            let results_list_for_search_key = self.results_list.clone();
+            let list_view_for_search_key = self.list_view.clone();
             let search_controller = gtk4::EventControllerKey::new();
             search_controller.connect_key_pressed(move |_, key, _, _| {
-                let results_list = results_list_for_search_key.clone();
+                let list_view = list_view_for_search_key.clone();
                 match key {
                     Key::Escape => {
-                        if let Some(row) = results_list.first_child() {
-                            if let Some(list_row) = row.downcast_ref::<ListBoxRow>() {
-                                results_list.select_row(Some(list_row));
-                                list_row.grab_focus();
+                        if let Some(selection_model) =
+                            list_view.model().and_downcast::<SingleSelection>()
+                        {
+                            if selection_model.n_items() > 0 {
+                                selection_model.set_selected(0);
                             }
                         }
                         glib::Propagation::Stop
@@ -199,33 +277,21 @@ impl LauncherWindow {
             self.search_entry.add_controller(search_controller);
         }
 
-        let results_list_for_window = self.results_list.clone();
+        let list_view_for_window = self.list_view.clone();
         let window_for_window = self.window.clone();
         let search_entry_for_window = self.search_entry.clone();
 
         let window_controller = gtk4::EventControllerKey::new();
         window_controller.connect_key_pressed(move |_, key, _, _| {
             let config = Config::load();
-            let results_list = results_list_for_window.clone();
+            let list_view = list_view_for_window.clone();
             let window = window_for_window.clone();
             let search_entry = search_entry_for_window.clone();
 
             match key {
                 Key::Escape => {
-                    if config.window.show_search && search_entry.has_focus() {
-                        if search_entry.text().is_empty() {
-                            if let Some(row) = results_list.first_child() {
-                                if let Some(list_row) = row.downcast_ref::<ListBoxRow>() {
-                                    results_list.select_row(Some(list_row));
-                                    list_row.grab_focus();
-                                }
-                            }
-                        } else {
-                            search_entry.set_text("");
-                        }
-                    } else {
-                        window.hide();
-                    }
+                    search_entry.set_text("");
+                    window.hide();
                     glib::Propagation::Stop
                 }
                 Key::slash if config.window.show_search => {
@@ -234,13 +300,13 @@ impl LauncherWindow {
                 }
                 Key::Up | Key::k if config.window.vim_keys || key == Key::Up => {
                     if !search_entry.has_focus() {
-                        select_previous(&results_list);
+                        select_previous(&list_view);
                     }
                     glib::Propagation::Stop
                 }
                 Key::Down | Key::j if config.window.vim_keys || key == Key::Down => {
                     if !search_entry.has_focus() {
-                        select_next(&results_list);
+                        select_next(&list_view);
                     }
                     glib::Propagation::Stop
                 }
@@ -251,27 +317,28 @@ impl LauncherWindow {
 
         let window_for_row = self.window.clone();
         let search_entry_for_row = self.search_entry.clone();
-        let app_data_store_for_row = self.app_data_store.clone();
 
-        self.results_list.connect_row_activated(move |_, row| {
-            if let Some(app_data) = get_app_data(row.index() as usize, &app_data_store_for_row) {
-                if launch_application(&app_data, &search_entry_for_row) {
-                    window_for_row.hide();
+        self.list_view.connect_activate(move |list_view, position| {
+            if let Some(model) = list_view.model() {
+                if let Some(item) = model.item(position) {
+                    if let Some(app_entry) = item.downcast_ref::<AppEntryObject>() {
+                        if launch_application(&app_entry.imp().app_entry(), &search_entry_for_row) {
+                            window_for_row.hide();
+                        }
+                    }
                 }
             }
         });
 
-        let results_list_for_activate = self.results_list.clone();
+        let list_view_for_activate = self.list_view.clone();
         let window_for_activate = self.window.clone();
         let search_entry_for_activate = self.search_entry.clone();
-        let app_data_store_for_activate = self.app_data_store.clone();
 
         self.search_entry.connect_activate(move |_| {
-            if let Some(row) = results_list_for_activate.selected_row() {
-                if let Some(app_data) =
-                    get_app_data(row.index() as usize, &app_data_store_for_activate)
-                {
-                    if launch_application(&app_data, &search_entry_for_activate) {
+            if let Some(selected) = get_selected_item(&list_view_for_activate) {
+                if let Some(app_entry) = selected.downcast_ref::<AppEntryObject>() {
+                    if launch_application(&app_entry.imp().app_entry(), &search_entry_for_activate)
+                    {
                         window_for_activate.hide();
                     }
                 }
@@ -327,128 +394,48 @@ impl LauncherWindow {
     }
 }
 
-fn get_app_data(index: usize, store: &Rc<RefCell<Vec<AppEntry>>>) -> Option<AppEntry> {
-    store.borrow().get(index).cloned()
-}
-
 fn update_results_list(
-    list: &ListBox,
+    list_view: &ListView,
     results: Vec<search::SearchResult>,
     store: &Rc<RefCell<Vec<AppEntry>>>,
 ) {
-    while let Some(child) = list.first_child() {
-        list.remove(&child);
-    }
+    if let Some(selection_model) = list_view.model().and_downcast::<SingleSelection>() {
+        if let Some(model) = selection_model.model().and_downcast::<gio::ListStore>() {
+            model.remove_all();
+            let mut store = store.borrow_mut();
+            store.clear();
+            store.reserve(50);
 
-    let mut store = store.borrow_mut();
-    store.clear();
-    store.reserve(50);
+            let results = if results.len() > 50 {
+                &results[..50]
+            } else {
+                &results
+            };
 
-    if results.is_empty() {
-        let empty_row = gtk4::ListBoxRow::new();
-        empty_row.set_visible(true);
-        empty_row.set_selectable(false);
-        empty_row.add_css_class("invisible-row");
-        empty_row.set_child(Some(&Label::new(Some(""))));
-        list.append(&empty_row);
-        return;
-    }
+            store.extend(results.iter().map(|r| r.app.clone()));
 
-    let results = if results.len() > 50 {
-        &results[..50]
-    } else {
-        &results
-    };
-
-    let mut rows = Vec::with_capacity(results.len());
-    store.extend(results.iter().map(|r| r.app.clone()));
-
-    let config = Config::load();
-    for result in results {
-        rows.push(create_result_row(&result.app, &config));
-    }
-
-    for row in rows {
-        list.append(&row);
-    }
-
-    if let Some(first_row) = list.row_at_index(0) {
-        list.select_row(Some(&first_row));
-    }
-}
-
-#[inline]
-fn create_result_row(app: &AppEntry, config: &Config) -> gtk4::ListBoxRow {
-    let row = gtk4::ListBoxRow::new();
-    let box_row = GtkBox::new(Orientation::Horizontal, 12);
-
-    box_row.set_margin_start(12);
-    box_row.set_margin_end(12);
-    box_row.set_margin_top(8);
-    box_row.set_margin_bottom(8);
-
-    if config.window.show_icons {
-        let icon = if !app.icon_name.is_empty() && app.icon_name != "application-x-executable" {
-            gtk4::Image::from_icon_name(&app.icon_name)
-        } else {
-            gtk4::Image::new()
-        };
-
-        icon.set_pixel_size(32);
-        icon.set_margin_end(8);
-        box_row.append(&icon);
-    }
-
-    let text_box = GtkBox::new(Orientation::Vertical, 4);
-    text_box.set_hexpand(true);
-
-    let name_label = create_label(&app.name, "app-name", true);
-    text_box.append(&name_label);
-
-    if config.window.show_descriptions && !app.description.is_empty() {
-        let desc_label = create_label(&app.description, "app-description", true);
-        text_box.append(&desc_label);
-    }
-
-    if config.window.show_paths {
-        let path_label = create_label(&app.path, "app-path", true);
-        text_box.append(&path_label);
-    }
-
-    box_row.append(&text_box);
-    row.set_child(Some(&box_row));
-    row
-}
-
-#[inline]
-fn create_label(text: &str, css_class: &str, wrap: bool) -> Label {
-    let label = Label::new(Some(text));
-    label.set_halign(gtk4::Align::Start);
-    if wrap {
-        label.set_wrap(true);
-        label.set_wrap_mode(gtk4::pango::WrapMode::WordChar);
-        label.set_max_width_chars(50);
-    }
-    label.add_css_class(css_class);
-    label
-}
-
-fn select_next(list: &ListBox) {
-    if let Some(current) = list.selected_row() {
-        if let Some(next) = list.row_at_index(current.index() + 1) {
-            list.select_row(Some(&next));
-            next.grab_focus();
+            for result in results {
+                model.append(&AppEntryObject::new(result.app.clone()));
+            }
         }
     }
 }
 
-fn select_previous(list: &ListBox) {
-    if let Some(current) = list.selected_row() {
-        if current.index() > 0 {
-            if let Some(prev) = list.row_at_index(current.index() - 1) {
-                list.select_row(Some(&prev));
-                prev.grab_focus();
-            }
+fn select_next(list_view: &ListView) {
+    if let Some(selection_model) = list_view.model().and_downcast::<SingleSelection>() {
+        let n_items = selection_model.n_items();
+        let current_pos = selection_model.selected();
+        if current_pos < n_items - 1 {
+            selection_model.set_selected(current_pos + 1);
+        }
+    }
+}
+
+fn select_previous(list_view: &ListView) {
+    if let Some(selection_model) = list_view.model().and_downcast::<SingleSelection>() {
+        let current_pos = selection_model.selected();
+        if current_pos > 0 {
+            selection_model.set_selected(current_pos - 1);
         }
     }
 }
@@ -503,4 +490,79 @@ impl WindowAnchoring for ApplicationWindow {
         self.set_anchor(Edge::Bottom, anchors[2]);
         self.set_anchor(Edge::Left, anchors[3]);
     }
+}
+
+glib::wrapper! {
+    pub struct AppEntryObject(ObjectSubclass<imp::AppEntryObject>);
+}
+
+mod imp {
+    use super::*;
+    use once_cell::sync::OnceCell;
+
+    #[derive(Default)]
+    pub struct AppEntryObject {
+        pub(crate) name: OnceCell<String>,
+        pub(crate) description: OnceCell<String>,
+        pub(crate) path: OnceCell<String>,
+        pub(crate) icon_name: OnceCell<String>,
+        pub(crate) app_entry: OnceCell<AppEntry>,
+    }
+
+    impl AppEntryObject {
+        pub fn name(&self) -> &str {
+            self.name.get().unwrap()
+        }
+
+        pub fn description(&self) -> &str {
+            self.description.get().unwrap()
+        }
+
+        pub fn path(&self) -> &str {
+            self.path.get().unwrap()
+        }
+
+        pub fn icon_name(&self) -> &str {
+            self.icon_name.get().unwrap()
+        }
+
+        pub fn app_entry(&self) -> &AppEntry {
+            self.app_entry.get().unwrap()
+        }
+    }
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for AppEntryObject {
+        const NAME: &'static str = "AppEntryObject";
+        type Type = super::AppEntryObject;
+        type ParentType = glib::Object;
+    }
+
+    impl ObjectImpl for AppEntryObject {}
+}
+
+impl AppEntryObject {
+    pub fn new(app_entry: AppEntry) -> Self {
+        let obj: Self = glib::Object::new();
+        let imp = obj.imp();
+        imp.name.set(app_entry.name.clone()).unwrap();
+        imp.description.set(app_entry.description.clone()).unwrap();
+        imp.path.set(app_entry.path.clone()).unwrap();
+        imp.icon_name.set(app_entry.icon_name.clone()).unwrap();
+        imp.app_entry.set(app_entry).unwrap();
+        obj
+    }
+}
+
+fn get_selected_item(list_view: &ListView) -> Option<AppEntryObject> {
+    list_view
+        .model()
+        .and_downcast::<SingleSelection>()
+        .and_then(|selection| {
+            let position = selection.selected();
+            selection
+                .model()
+                .and_then(|model| model.item(position))
+                .and_downcast::<AppEntryObject>()
+        })
 }

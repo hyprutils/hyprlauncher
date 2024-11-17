@@ -8,21 +8,19 @@ use tokio::sync::RwLock;
 pub static APP_CACHE: Lazy<RwLock<HashMap<String, AppEntry>>> =
     Lazy::new(|| RwLock::new(HashMap::with_capacity(2000)));
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct AppEntry {
     pub name: String,
-    pub name_lowercase: String,
+    pub description: String,
+    pub path: String,
     pub exec: String,
     pub icon_name: String,
-    pub path: String,
-    pub description: String,
     pub launch_count: u32,
     pub entry_type: EntryType,
-    #[serde(default)]
     pub score_boost: i64,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum EntryType {
     Application,
     File,
@@ -152,7 +150,6 @@ fn parse_desktop_entry(path: &std::path::Path) -> Option<AppEntry> {
         .unwrap_or("");
 
     Some(AppEntry {
-        name_lowercase: name.to_lowercase(),
         name: name.to_string(),
         exec: exec.to_string(),
         icon_name: icon.to_string(),
@@ -192,9 +189,8 @@ pub fn create_file_entry(path: String) -> Option<AppEntry> {
     };
 
     Some(AppEntry {
-        name_lowercase: name.to_lowercase(),
         name,
-        exec,
+        exec: exec.to_string(),
         icon_name: icon_name.to_string(),
         description: String::new(),
         path,
