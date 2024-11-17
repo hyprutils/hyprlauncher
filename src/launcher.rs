@@ -36,38 +36,44 @@ static DESKTOP_PATHS: &[&str] = &[
     "~/.local/share/flatpak/exports/share/applications",
 ];
 
-pub fn increment_launch_count(app: &AppEntry) {
+const DEFAULT_SCORE_BOOST: i64 = 2000;
+
+pub fn increment_launch_count(app: &AppEntry) -> Result<(), std::io::Error> {
     let app_name = app.name.clone();
     let count = app.launch_count + 1;
 
     std::thread::spawn(move || {
-        save_heatmap(&app_name, count);
+        save_heatmap(&app_name, count).unwrap();
     });
+
+    Ok(())
 }
 
 #[inline]
-fn save_heatmap(name: &str, count: u32) {
+fn save_heatmap(name: &str, count: u32) -> Result<(), std::io::Error> {
     let path = shellexpand::tilde(HEATMAP_PATH).to_string();
 
     if let Some(dir) = std::path::Path::new(&path).parent() {
         let _ = std::fs::create_dir_all(dir);
     }
 
-    let mut heatmap = load_heatmap();
+    let mut heatmap = load_heatmap()?;
     heatmap.insert(name.to_string(), count);
 
     if let Ok(contents) = serde_json::to_string(&heatmap) {
         let _ = fs::write(path, contents);
     }
+
+    Ok(())
 }
 
 #[inline]
-fn load_heatmap() -> HashMap<String, u32> {
+fn load_heatmap() -> Result<HashMap<String, u32>, std::io::Error> {
     let path = shellexpand::tilde(HEATMAP_PATH).to_string();
-    fs::read_to_string(path)
+    Ok(fs::read_to_string(path)
         .ok()
         .and_then(|contents| serde_json::from_str(&contents).ok())
-        .unwrap_or_else(|| HashMap::with_capacity(100))
+        .unwrap_or_else(|| HashMap::with_capacity(100)))
 }
 
 pub fn get_desktop_paths() -> Vec<PathBuf> {
@@ -90,7 +96,7 @@ pub fn get_desktop_paths() -> Vec<PathBuf> {
     paths
 }
 
-pub async fn load_applications() {
+pub async fn load_applications() -> Result<(), std::io::Error> {
     log!("Starting application loading process");
     let heatmap_future = tokio::task::spawn_blocking(load_heatmap);
 
@@ -118,10 +124,9 @@ pub async fn load_applications() {
         })
         .collect();
 
-    let heatmap = heatmap_future.await.unwrap_or_default();
-
+    let heatmap = heatmap_future.await?;
     for mut entry in entries {
-        if let Some(count) = heatmap.get(&entry.name) {
+        if let Some(count) = heatmap.as_ref().unwrap().get(&entry.name) {
             entry.launch_count = *count;
         }
         apps.insert(entry.name.clone(), entry);
@@ -130,6 +135,8 @@ pub async fn load_applications() {
     log!("Loaded {} total applications", apps.len());
     let mut cache = APP_CACHE.write().await;
     *cache = apps;
+
+    Ok(())
 }
 
 #[inline]
@@ -141,19 +148,21 @@ fn parse_desktop_entry(path: &std::path::Path) -> Option<AppEntry> {
         return None;
     }
 
-    let name = section.attr("Name")?;
-    let exec = section.attr("Exec").unwrap_or_default();
-    let icon = section.attr("Icon").unwrap_or("application-x-executable");
-    let desc = section
-        .attr("Comment")
-        .or_else(|| section.attr("GenericName"))
-        .unwrap_or("");
+    let name = String::from(section.attr("Name")?);
+    let exec = String::from(section.attr("Exec").unwrap_or_default());
+    let icon = String::from(section.attr("Icon").unwrap_or("application-x-executable"));
+    let desc = String::from(
+        section
+            .attr("Comment")
+            .or_else(|| section.attr("GenericName"))
+            .unwrap_or(""),
+    );
 
     Some(AppEntry {
-        name: name.to_string(),
-        exec: exec.to_string(),
-        icon_name: icon.to_string(),
-        description: desc.to_string(),
+        name,
+        exec,
+        icon_name: icon,
+        description: desc,
         path: path.to_string_lossy().into_owned(),
         launch_count: 0,
         entry_type: EntryType::Application,
@@ -180,7 +189,7 @@ pub fn create_file_entry(path: String) -> Option<AppEntry> {
         .to_string();
 
     let (icon_name, exec, score_boost) = if metadata.is_dir() {
-        ("folder", String::new(), 2000)
+        ("folder", String::new(), DEFAULT_SCORE_BOOST)
     } else if metadata.permissions().mode() & 0o111 != 0 {
         ("application-x-executable", format!("\"{}\"", path), 0)
     } else {
@@ -190,7 +199,7 @@ pub fn create_file_entry(path: String) -> Option<AppEntry> {
 
     Some(AppEntry {
         name,
-        exec: exec.to_string(),
+        exec,
         icon_name: icon_name.to_string(),
         description: String::new(),
         path,

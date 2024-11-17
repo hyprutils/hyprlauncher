@@ -222,7 +222,7 @@ impl LauncherWindow {
         );
 
         let app_data_store = Rc::new(RefCell::new(Vec::with_capacity(50)));
-        update_results_list(&list_view, initial_results, &app_data_store);
+        update_results_list(&list_view, initial_results.unwrap(), &app_data_store);
 
         let launcher = Self {
             window,
@@ -308,6 +308,7 @@ impl LauncherWindow {
                     let results = rt_handle
                         .spawn(async move { search::search_applications(&query, &config).await })
                         .await
+                        .unwrap()
                         .unwrap_or_default();
                     update_results_list(&list_view, results, &app_data_store);
                 });
@@ -553,7 +554,7 @@ fn launch_application(app: &AppEntry, search_entry: &SearchEntry) -> bool {
                 .trim()
                 .to_string();
 
-            launcher::increment_launch_count(app);
+            launcher::increment_launch_count(app).unwrap();
 
             Command::new("sh").arg("-c").arg(&exec).spawn().is_ok()
         }

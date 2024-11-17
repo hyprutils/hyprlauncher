@@ -6,12 +6,20 @@ use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use std::{os::unix::fs::PermissionsExt, path::PathBuf};
 use tokio::sync::oneshot;
 
+const BONUS_SCORE_LAUNCH_COUNT: i64 = 100;
+const BONUS_SCORE_ICON_NAME: i64 = 1000;
+const BONUS_SCORE_BINARY: i64 = 3000;
+const BONUS_SCORE_FOLDER: i64 = 2000;
+
 pub struct SearchResult {
     pub app: AppEntry,
     pub score: i64,
 }
 
-pub async fn search_applications(query: &str, config: &Config) -> Vec<SearchResult> {
+pub async fn search_applications(
+    query: &str,
+    config: &Config,
+) -> Result<Vec<SearchResult>, std::io::Error> {
     let (tx, rx) = oneshot::channel();
     let query = query.to_lowercase();
     let max_results = config.window.max_entries;
@@ -50,7 +58,7 @@ pub async fn search_applications(query: &str, config: &Config) -> Vec<SearchResu
                     if name_lower == query {
                         results.push(SearchResult {
                             app: app.clone(),
-                            score: 10000 + calculate_bonus_score(app),
+                            score: BONUS_SCORE_BINARY + calculate_bonus_score(app),
                         });
                         seen_names.insert(name_lower);
                         continue;
@@ -79,19 +87,21 @@ pub async fn search_applications(query: &str, config: &Config) -> Vec<SearchResu
             }
         };
 
-        let _ = tx.send(results);
+        tx.send(results)
+            .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Failed to send results"))
     });
 
-    rx.await.unwrap_or_default()
+    rx.await
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Failed to receive results"))
 }
 
 #[inline(always)]
 fn calculate_bonus_score(app: &AppEntry) -> i64 {
-    (app.launch_count as i64 * 100)
+    (app.launch_count as i64 * BONUS_SCORE_LAUNCH_COUNT)
         + if app.icon_name == "application-x-executable" {
             0
         } else {
-            1000
+            BONUS_SCORE_ICON_NAME
         }
 }
 
@@ -119,9 +129,9 @@ fn check_binary(query: &str) -> Option<SearchResult> {
                 icon_name: String::from("application-x-executable"),
                 launch_count: 0,
                 entry_type: EntryType::File,
-                score_boost: 3000,
+                score_boost: BONUS_SCORE_BINARY,
             },
-            score: 3000,
+            score: BONUS_SCORE_BINARY,
         })
 }
 
@@ -148,10 +158,10 @@ fn handle_path_search(query: &str) -> Vec<SearchResult> {
                     launcher::create_file_entry(parent_dir.to_string_lossy().into_owned())
                 {
                     app_entry.name = String::from("..");
-                    app_entry.score_boost = 3000;
+                    app_entry.score_boost = BONUS_SCORE_FOLDER;
                     results.push(SearchResult {
                         app: app_entry,
-                        score: 3000,
+                        score: BONUS_SCORE_FOLDER,
                     });
                 }
             }
@@ -162,9 +172,9 @@ fn handle_path_search(query: &str) -> Vec<SearchResult> {
                     let path = entry.path().to_string_lossy().into_owned();
                     launcher::create_file_entry(path).map(|mut app| {
                         let score = if app.icon_name == "folder" {
-                            2000
+                            BONUS_SCORE_FOLDER
                         } else {
-                            1000
+                            BONUS_SCORE_ICON_NAME
                         };
                         app.score_boost = score;
                         SearchResult { app, score }
