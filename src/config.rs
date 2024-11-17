@@ -313,20 +313,20 @@ impl Config {
                     border-radius: {}px;
                     {}
                 }}
-                list {{
+                listview {{
                     background: @theme_bg_color;
                 }}
-                list row {{
+                listview > row {{
                     padding: {}px;
                     margin: {}px;
                     border-radius: {}px;
                     background: @theme_bg_color;
                     transition: all 200ms ease;
                 }}
-                list row:selected {{
+                listview > row:selected {{
                     background-color: @theme_selected_bg_color;
                 }}
-                list row:hover:not(:selected) {{
+                listview > row:hover:not(:selected) {{
                     background-color: mix(@theme_bg_color, @theme_fg_color, 0.95);
                 }}
                 entry {{
@@ -359,7 +359,7 @@ impl Config {
                     font-family: {};
                     opacity: 0.8;
                 }}
-                scrollbar {{ opacity: 0; -gtk-secondary-caret-color: transparent; }}",
+                scrollbar {{ opacity: 0; }}",
                 theme.corners.window,
                 border_style,
                 theme.spacing.item_padding,
@@ -381,20 +381,20 @@ impl Config {
                     border-radius: {}px;
                     {}
                 }}
-                list {{
+                listview {{
                     background: {};
                 }}
-                list row {{
+                listview > row {{
                     padding: {}px;
                     margin: {}px;
                     border-radius: {}px;
                     background: {};
                     transition: all 200ms ease;
                 }}
-                list row:selected {{
+                listview > row:selected {{
                     background-color: {};
                 }}
-                list row:hover:not(:selected) {{
+                listview > row:hover:not(:selected) {{
                     background-color: {};
                 }}
                 entry {{
@@ -427,7 +427,7 @@ impl Config {
                     font-family: {};
                     opacity: 0.8;
                 }}
-                scrollbar {{ opacity: 0; -gtk-secondary-caret-color: transparent; }}",
+                scrollbar {{ opacity: 0; }}",
                 theme.colors.window_bg,
                 theme.corners.window,
                 border_style,
