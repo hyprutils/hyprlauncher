@@ -19,15 +19,19 @@ The configuration file controls the appearance and behavior of the launcher wind
     "show_paths": false,         // Show application paths in the list
     "show_icons": true,          // Show application icons in the list
     "show_search": true,         // Show the search bar
-    "vim_keys": true,            // Enable vim-style navigation (j/k for up/down)
+    "custom_navigate_keys": {    // Customize navigation key bindings
+      "up": "k",                 // Key to move selection up
+      "down": "j",               // Key to move selection down
+      "delete_word": "h"         // Key to delete word in search
+    },
     "show_border": true,         // Show window border
     "border_width": 2,           // Border width in pixels
-    "border_color": "#333333",   // Border color in hex format
     "use_gtk_colors": false,     // Use GTK theme colors instead of custom colors
     "max_entries": 50            // Maximum number of entries to show in the list
   },
   "theme": {
     "colors": {
+      "border_color": "#333333",        // Border color in hex format
       "window_bg": "#0f0f0f",           // Window background color
       "search_bg": "#1f1f1f",           // Search bar background color
       "search_bg_focused": "#282828",   // Search bar background color when focused
@@ -82,10 +86,11 @@ The `anchor` setting determines where the window appears on screen. Options are:
 ### Performance
 - `max_entries`: Limits the maximum number of entries shown in the list for better performance
 
-### Vim Keys
-When `vim_keys` is enabled:
-- `ctrl+j`: Move selection down
-- `ctrl+k`: Move selection up
+### Navigation Keys
+Navigation can be customized using the `custom_navigate_keys` setting:
+- `up`: Key to move selection up (default: "CTRL + k")
+- `down`: Key to move selection down (default: "CTRL + j")
+- `delete_word`: Key to delete word in search (default: "CTRL + h")
 
 ### Search
 - The search bar can be focused by pressing `/`
