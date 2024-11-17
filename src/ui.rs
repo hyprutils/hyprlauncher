@@ -357,8 +357,7 @@ impl LauncherWindow {
         self.search_entry.connect_activate(move |_| {
             if let Some(selected) = get_selected_item(&list_view_for_activate) {
                 if let Some(app_entry) = selected.downcast_ref::<AppEntryObject>() {
-                    if launch_application(app_entry.imp().app_entry(), &search_entry_for_activate)
-                    {
+                    if launch_application(app_entry.imp().app_entry(), &search_entry_for_activate) {
                         window_for_activate.hide();
                     }
                 }
