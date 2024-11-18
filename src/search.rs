@@ -24,13 +24,14 @@ pub async fn search_applications(
     let (tx, rx) = oneshot::channel();
     let query = query.to_lowercase();
     let max_results = config.window.max_entries;
+    let calculator_enabled = config.modes.calculator;
 
     tokio::task::spawn_blocking(move || {
         let cache = APP_CACHE.blocking_read();
 
         let results = match query.chars().next() {
             Some('~' | '$' | '/') => handle_path_search(&query),
-            Some('=') => handle_calculation(&query),
+            Some('=') if calculator_enabled => handle_calculation(&query),
 
             None => {
                 let mut results = Vec::with_capacity(max_results);

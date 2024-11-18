@@ -5,6 +5,7 @@ Configuration file location: `~/.config/hyprlauncher/config.json`
 ## Configuration file
 
 The configuration file controls the appearance and behavior of the launcher window.
+
 ```json
 {
   "window": {
@@ -67,12 +68,18 @@ The configuration file controls the appearance and behavior of the launcher wind
     "disable_auto_focus": false,  // Disable automatic keyboard focus
     "enable_logging": false       // Enable application logging
   }
+  modes: {
+    calculator: false // Enable the calculator functionality
+  }
 }
 ```
+
 ## Features
 
 ### Window Anchoring
+
 The `anchor` setting determines where the window appears on screen. Options are:
+
 - center: Window appears in the center of the screen
 - top: Window appears at the top of the screen
 - bottom: Window appears at the bottom of the screen
@@ -84,15 +91,19 @@ The `anchor` setting determines where the window appears on screen. Options are:
 - bottom_right: Window appears in the bottom right corner
 
 ### Performance
+
 - `max_entries`: Limits the maximum number of entries shown in the list for better performance
 
 ### Navigation Keys
+
 Navigation can be customized using the `custom_navigate_keys` setting:
+
 - `up`: Key to move selection up (default: "CTRL + k")
 - `down`: Key to move selection down (default: "CTRL + j")
 - `delete_word`: Key to delete word in search (default: "CTRL + h")
 
 ### Search
+
 - The search bar can be focused by pressing `/`
 - Escape clears the search or moves focus to the results list
 - Supports fuzzy matching for application names
@@ -100,6 +111,7 @@ Navigation can be customized using the `custom_navigate_keys` setting:
 - Search results are ranked by launch frequency
 
 ### Visual Customization
+
 - Border customization with `border_width` - Window section, and `border` - Theme section
 - Corner radius customization for window, search bar, and list items
 - Option to use GTK theme colors with `use_gtk_colors`
@@ -107,14 +119,21 @@ Navigation can be customized using the `custom_navigate_keys` setting:
 - theme customization including colors, spacing, and typography
 
 ### Debug Options
+
 - `disable_auto_focus`: Prevents the window from automatically holding all input
 - `enable_logging`: Enables logging to the terminal window Hyprlauncher was launched from
 
+### Modes
+
+- calculator: Do calculations when starting your search with '='
+
 ## Hot Reloading
+
 The configuration file is watched for changes and will automatically reload when modified. No need to restart the application.
 
 > [!NOTE]
 > To interact and see your live config changes while the launcher is open, set `disable_auto_focus` to `true` in your config:
+>
 > ```json
 > {
 >   "debug": {
@@ -122,10 +141,13 @@ The configuration file is watched for changes and will automatically reload when
 >   }
 > }
 > ```
+>
 > This allows you to edit the config file while the launcher window is open. Otherwise, the launcher's exclusive keyboard focus will prevent text editing in other windows.
 
 ## Default Paths
+
 Applications are searched in the following locations:
+
 - ~/.local/share/applications
 - /usr/share/applications
 - /usr/local/share/applications
@@ -135,13 +157,15 @@ Applications are searched in the following locations:
 Furthermore, applications can be indexed via XDG_DATA_DIRS environment variable.
 
 ## Application Launch History
+
 Hyprlauncher maintains a launch history for applications in `~/.local/share/hyprlauncher/heatmap.json`. This is used to improve search result rankings based on usage frequency.
 
 ## Config Merging
+
 If the configuration file is invalid or missing certain values, Hyprlauncher will:
+
 1. Use default values for missing fields
 2. Merge existing valid configuration with defaults
 3. Write the merged configuration back to the file
 
 The configuration file is strict and requires valid JSON format. Invalid configurations will fall back to defaults.
-

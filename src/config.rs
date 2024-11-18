@@ -143,6 +143,7 @@ pub struct Config {
     pub window: Window,
     pub theme: Theme,
     pub debug: Debug,
+    pub modes: Modes,
 }
 
 #[allow(non_camel_case_types)]
@@ -223,6 +224,11 @@ impl Default for NavigateKeys {
             delete_word: String::from("h"),
         }
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
+pub struct Modes {
+    pub calculator: bool,
 }
 
 impl Config {
