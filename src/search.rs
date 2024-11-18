@@ -2,6 +2,7 @@ use crate::{
     config::Config,
     launcher::{self, AppEntry, EntryType, APP_CACHE},
 };
+use evalexpr::eval;
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use std::{os::unix::fs::PermissionsExt, path::PathBuf};
 use tokio::sync::oneshot;
@@ -21,6 +22,7 @@ pub async fn search_applications(query: &str, config: &Config) -> Vec<SearchResu
 
         let results = match query.chars().next() {
             Some('~' | '$' | '/') => handle_path_search(&query),
+            Some('=') => handle_calculation(&query),
 
             None => {
                 let mut results = Vec::with_capacity(max_results);
@@ -187,4 +189,29 @@ fn handle_path_search(query: &str) -> Vec<SearchResult> {
             results
         })
         .unwrap_or_default()
+}
+
+#[inline(always)]
+fn handle_calculation(query: &str) -> Vec<SearchResult> {
+    println!("query is {}", query);
+    let query = &query[1..];
+    let res = match query {
+        "" => evalexpr::Value::from_int(0),
+        _ => match eval(query) {
+            Ok(res) => res,
+            Err(e) => {
+                println!("Error: {}", e);
+                evalexpr::Value::from_int(0)
+            }
+        },
+    };
+
+    let entry = launcher::create_calc_entry(res.to_string()).unwrap();
+
+    let enteries: Vec<_> = vec![SearchResult {
+        app: entry,
+        score: 5000,
+    }];
+
+    enteries
 }
