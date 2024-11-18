@@ -141,7 +141,7 @@ The configuration file is watched for changes and will automatically reload when
 >   }
 > }
 > ```
->
+
 > This allows you to edit the config file while the launcher window is open. Otherwise, the launcher's exclusive keyboard focus will prevent text editing in other windows.
 
 ## Default Paths
