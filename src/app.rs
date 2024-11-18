@@ -10,7 +10,7 @@ use std::{
     path::PathBuf,
     process,
     sync::mpsc,
-    time::Duration,
+    time::{self, Duration, Instant},
 };
 use tokio::runtime::Runtime;
 
@@ -54,11 +54,11 @@ impl App {
 
         let app_clone = app.clone();
         let mut last_config = Config::load();
-        let mut last_update = std::time::Instant::now();
+        let mut last_update = Instant::now();
 
         glib::timeout_add_local(Duration::from_millis(100), move || {
             if rx.try_recv().is_ok() {
-                let now = std::time::Instant::now();
+                let now = Instant::now();
                 if now.duration_since(last_update).as_millis() > 250 {
                     if let Some(window) = app_clone.windows().first() {
                         log!("Loading new config for comparison");
@@ -82,9 +82,9 @@ impl App {
         });
 
         if !app.is_remote() {
-            let load_start = std::time::Instant::now();
+            let load_start = Instant::now();
             rt.block_on(async {
-                crate::launcher::load_applications().await;
+                crate::launcher::load_applications().await.unwrap();
             });
             log!(
                 "Loading applications ({:.3}ms)",
@@ -129,7 +129,8 @@ impl App {
 
     fn can_create_instance() -> bool {
         let runtime_dir = PathBuf::from("/tmp/hyprlauncher");
-        let _ = fs::create_dir_all(&runtime_dir);
+        fs::create_dir_all(&runtime_dir)
+            .unwrap_or_else(|_| panic!("Failed to create runtime directory"));
 
         Self::cleanup_stale_instances(&runtime_dir);
 
@@ -149,8 +150,8 @@ impl App {
         let _ = writeln!(
             file,
             "{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
+            time::SystemTime::now()
+                .duration_since(time::UNIX_EPOCH)
                 .unwrap()
                 .as_secs()
         );

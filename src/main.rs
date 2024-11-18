@@ -4,8 +4,6 @@ mod launcher;
 mod search;
 mod ui;
 
-use app::App;
-
 #[macro_export]
 macro_rules! log {
     ($($arg:tt)*) => {{
@@ -17,6 +15,6 @@ macro_rules! log {
 
 fn main() {
     log!("Starting Hyprlauncher...");
-    let app = App::new();
+    let app = app::App::new();
     std::process::exit(app.run());
 }
