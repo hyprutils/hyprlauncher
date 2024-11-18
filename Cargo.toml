@@ -7,9 +7,9 @@ description = "GUI for launching applications, written in blazingly fast Rust!"
 repository = "https://github.com/hyprutils/hyprlauncher.git"
 readme = "readme.md"
 keywords = [
-    "gui", 
-    "hyprland", 
-    "wayland", 
+    "gui",
+    "hyprland",
+    "wayland",
     "launcher",
 ]
 categories = ["gui"]
