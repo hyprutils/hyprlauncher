@@ -5,6 +5,7 @@ use gtk4::{
     Application, ApplicationWindow,
 };
 use std::{
+    env,
     fs::{self, File},
     io::Write,
     path::PathBuf,
@@ -121,14 +122,19 @@ impl App {
         status.into()
     }
 
+    fn get_runtime_dir() -> PathBuf {
+        let xdg_runtime_dir = env::var("XDG_RUNTIME_DIR").unwrap_or(String::from("/tmp"));
+        PathBuf::from(format!("{}/hyprlauncher", xdg_runtime_dir))
+    }
+
     fn get_instance_file() -> Option<PathBuf> {
-        let runtime_dir = PathBuf::from("/tmp/hyprlauncher");
+        let runtime_dir = Self::get_runtime_dir();
         let pid = process::id();
         Some(runtime_dir.join(format!("instance-{}", pid)))
     }
 
     fn can_create_instance() -> bool {
-        let runtime_dir = PathBuf::from("/tmp/hyprlauncher");
+        let runtime_dir = Self::get_runtime_dir();
         fs::create_dir_all(&runtime_dir)
             .unwrap_or_else(|_| panic!("Failed to create runtime directory"));
 
