@@ -577,7 +577,6 @@ fn launch_application(app: &AppEntry, search_entry: &SearchEntry) -> bool {
         }
         EntryType::Calculation => {
             log!("Copying calculation resault");
-            println!("running {}", &app.exec);
             Command::new("sh").arg("-c").arg(&app.exec).spawn().is_ok()
         }
     }

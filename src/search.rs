@@ -203,17 +203,10 @@ fn handle_path_search(query: &str) -> Vec<SearchResult> {
 
 #[inline(always)]
 fn handle_calculation(query: &str) -> Vec<SearchResult> {
-    println!("query is {}", query);
     let query = &query[1..];
     let res = match query {
         "" => evalexpr::Value::from_int(0),
-        _ => match eval(query) {
-            Ok(res) => res,
-            Err(e) => {
-                println!("Error: {}", e);
-                evalexpr::Value::from_int(0)
-            }
-        },
+        _ => eval(query).unwrap_or(evalexpr::Value::from_int(0)),
     };
 
     let entry = launcher::create_calc_entry(res.to_string()).unwrap();

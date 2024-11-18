@@ -210,19 +210,6 @@ pub fn create_file_entry(path: String) -> Option<AppEntry> {
     })
 }
 
-pub fn create_calc_entry(res: String) -> Option<AppEntry> {
-    Some(AppEntry {
-        name: res.to_string(),
-        exec: format!("wl-copy -t text/plain \"{}\"", res),
-        icon_name: "calculator".to_string(),
-        description: String::new(),
-        path: String::new(),
-        launch_count: 0,
-        entry_type: EntryType::Calculation,
-        score_boost: 1000,
-    })
-}
-
 #[inline]
 fn get_mime_type_info(path: &str) -> (&'static str, String) {
     let output = std::process::Command::new("file")
@@ -246,7 +233,19 @@ fn get_mime_type_info(path: &str) -> (&'static str, String) {
             _ => "application-x-generic",
         }
     };
-    println!("{}", icon);
 
     (icon, format!("xdg-open \"{}\"", path))
+}
+
+pub fn create_calc_entry(res: String) -> Option<AppEntry> {
+    Some(AppEntry {
+        name: res.to_string(),
+        exec: format!("wl-copy -t text/plain \"{}\"", res),
+        icon_name: String::new(),
+        description: String::from("Click to copy to clipboard"),
+        path: String::new(),
+        launch_count: 0,
+        entry_type: EntryType::Calculation,
+        score_boost: 1000,
+    })
 }
