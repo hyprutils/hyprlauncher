@@ -280,6 +280,21 @@ impl LauncherWindow {
             let search_entry_for_enter = search_entry.clone();
             let search_entry_for_leave = search_entry.clone();
             let search_entry_for_controller = search_entry.clone();
+            let list_view_for_key = self.list_view.clone();
+
+            let key_controller = gtk4::EventControllerKey::new();
+            key_controller.connect_key_pressed(move |_, key, _, _| match key {
+                Key::Up => {
+                    select_previous(&list_view_for_key);
+                    glib::Propagation::Stop
+                }
+                Key::Down => {
+                    select_next(&list_view_for_key);
+                    glib::Propagation::Stop
+                }
+                _ => glib::Propagation::Proceed,
+            });
+            search_entry_for_controller.add_controller(key_controller);
 
             let focus_controller = gtk4::EventControllerFocus::new();
 
