@@ -125,7 +125,12 @@ impl LauncherWindow {
                 if let Some(box_row) = list_item.child().and_downcast::<GtkBox>() {
                     if config.window.show_icons {
                         if let Some(icon) = box_row.first_child().and_downcast::<gtk4::Image>() {
-                            icon.set_icon_name(Some(app_entry.imp().icon_name()));
+                            let icon_name = app_entry.imp().icon_name();
+                            if icon_name.starts_with('/') {
+                                icon.set_from_file(Some(icon_name));
+                            } else {
+                                icon.set_icon_name(Some(icon_name));
+                            }
                         }
                     }
 
