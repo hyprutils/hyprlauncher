@@ -29,10 +29,10 @@ pub enum EntryType {
 static HEATMAP_PATH: &str = "~/.local/share/hyprlauncher/heatmap.json";
 
 static DESKTOP_PATHS: &[&str] = &[
-    "~/.local/share/applications",
     "/usr/share/applications",
     "/usr/local/share/applications",
     "/var/lib/flatpak/exports/share/applications",
+    "~/.local/share/applications",
     "~/.local/share/flatpak/exports/share/applications",
 ];
 
