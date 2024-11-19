@@ -212,10 +212,10 @@ fn handle_calculation(query: &str) -> Vec<SearchResult> {
 
     let entry = launcher::create_calc_entry(res.to_string()).unwrap();
 
-    let enteries: Vec<_> = vec![SearchResult {
+    let entries: Vec<_> = vec![SearchResult {
         app: entry,
         score: 5000,
     }];
 
-    enteries
+    entries
 }
