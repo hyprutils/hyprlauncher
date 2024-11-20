@@ -577,11 +577,6 @@ fn launch_application(app: &AppEntry, search_entry: &SearchEntry) -> bool {
         }
         EntryType::Calculation => {
             log!("Copying calculation result");
-            Command::new("sh")
-                .arg("-c")
-                .arg(format!("echo {} | xclip -i", &app.name))
-                .spawn()
-                .unwrap();
             Command::new("sh").arg("-c").arg(&app.exec).spawn().is_ok()
         }
     }

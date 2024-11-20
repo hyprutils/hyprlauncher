@@ -3,7 +3,7 @@ use crate::{
     launcher::{self, AppEntry, EntryType, APP_CACHE},
 };
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
-use rink_core::{eval, simple_context};
+use rink_core::{one_line, simple_context};
 use std::{os::unix::fs::PermissionsExt, path::PathBuf};
 use tokio::sync::oneshot;
 
@@ -207,14 +207,12 @@ fn handle_calculation(query: &str) -> Vec<SearchResult> {
     let query = &query[1..];
     let mut ctx = simple_context().unwrap();
 
-    let res = match eval(&mut ctx, query) {
-        Ok(result) => result,
-        Err(_e) => {
-            return Vec::new(); // Return an empty vector if there's an error
-        }
+    let res = match one_line(&mut ctx, query) {
+        Ok(res) => res,
+        Err(_e) => "0".to_string(),
     };
 
-    let res = res.to_string().replace("(dimensionless)", "");
+    let res = res.replace("(dimensionless)", "");
 
     let entry = launcher::create_calc_entry(res).unwrap();
 
