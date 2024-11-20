@@ -2,8 +2,8 @@ use crate::{
     config::Config,
     launcher::{self, AppEntry, EntryType, APP_CACHE},
 };
-use evalexpr::eval;
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
+use rink_core::{eval, simple_context};
 use std::{os::unix::fs::PermissionsExt, path::PathBuf};
 use tokio::sync::oneshot;
 
@@ -205,12 +205,18 @@ fn handle_path_search(query: &str) -> Vec<SearchResult> {
 #[inline(always)]
 fn handle_calculation(query: &str) -> Vec<SearchResult> {
     let query = &query[1..];
-    let res = match query {
-        "" => evalexpr::Value::from_int(0),
-        _ => eval(query).unwrap_or(evalexpr::Value::from_int(0)),
+    let mut ctx = simple_context().unwrap();
+
+    let res = match eval(&mut ctx, query) {
+        Ok(result) => result,
+        Err(_e) => {
+            return Vec::new(); // Return an empty vector if there's an error
+        }
     };
 
-    let entry = launcher::create_calc_entry(res.to_string()).unwrap();
+    let res = res.to_string().replace("(dimensionless)", "");
+
+    let entry = launcher::create_calc_entry(res).unwrap();
 
     let entries: Vec<_> = vec![SearchResult {
         app: entry,
