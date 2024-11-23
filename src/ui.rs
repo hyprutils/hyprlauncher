@@ -14,7 +14,7 @@ use gtk4::{
     STYLE_PROVIDER_PRIORITY_USER,
 };
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
-use std::{cell::RefCell, process::Command, rc::Rc};
+use std::{cell::RefCell, process::{Command, Stdio}, rc::Rc};
 use tokio::runtime::Handle;
 
 pub struct LauncherWindow {
@@ -577,6 +577,20 @@ fn launch_application(app: &AppEntry, search_entry: &SearchEntry) -> bool {
         }
         EntryType::Calculation => {
             log!("Copying calculation result");
+
+            let echo = Command::new("echo")
+                .arg(&app.name)
+                .stdout(Stdio::piped())
+                .spawn()
+                .expect("Didn't work");
+
+            Command::new(r#"xclip"#)
+                .arg("-t")
+                .arg("UTF8_STRING")
+                .stdin(Stdio::from(echo.stdout.expect("NI")))
+                .spawn()
+                .expect("did");
+
             Command::new("sh").arg("-c").arg(&app.exec).spawn().is_ok()
         }
     }

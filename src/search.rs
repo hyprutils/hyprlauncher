@@ -212,9 +212,12 @@ fn handle_calculation(query: &str) -> Vec<SearchResult> {
         Err(_e) => "0".to_string(),
     };
 
-    let res = res.replace("(dimensionless)", "");
+    let res = match res.find("(") {
+        Some(pos) => &res[..pos - 1].to_string(),
+        None => &res,
+    };
 
-    let entry = launcher::create_calc_entry(res).unwrap();
+    let entry = launcher::create_calc_entry(res.clone()).unwrap();
 
     let entries: Vec<_> = vec![SearchResult {
         app: entry,
