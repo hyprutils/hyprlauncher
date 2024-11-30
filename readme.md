@@ -2,8 +2,9 @@
 
 <h2>Hyprlauncher <img src='https://raw.githubusercontent.com/hyprutils/.github/refs/heads/main/hyprutils_transparent.png'width='18' height='18'></h2>
 
-<img src='hyprlauncher.png' width='200' height='200'>
+<img src='hyprlauncher.png' width='200' height='200'><br>
 
+[![Grind Compliant](https://img.shields.io/badge/Grind-Compliant-blue)](https://github.com/The-Grindhouse/guidelines)<br>
 An unofficial [daemon-like](https://en.wikipedia.org/wiki/Daemon_(computing)) GUI for launching applications, built with GTK4 and Rust. 🚀🦀<br>
 
 ## Preview
