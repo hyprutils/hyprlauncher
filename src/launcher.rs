@@ -18,6 +18,8 @@ pub struct AppEntry {
     pub launch_count: u32,
     pub entry_type: EntryType,
     pub score_boost: i64,
+    pub keywords: Vec<String>,
+    pub categories: Vec<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -158,6 +160,26 @@ fn parse_desktop_entry(path: &std::path::Path) -> Option<AppEntry> {
             .unwrap_or(""),
     );
 
+    let keywords = section
+        .attr("Keywords")
+        .map(|k| {
+            k.split(';')
+                .filter(|s| !s.is_empty())
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let categories = section
+        .attr("Categories")
+        .map(|c| {
+            c.split(';')
+                .filter(|s| !s.is_empty())
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_default();
+
     Some(AppEntry {
         name,
         exec,
@@ -167,6 +189,8 @@ fn parse_desktop_entry(path: &std::path::Path) -> Option<AppEntry> {
         launch_count: 0,
         entry_type: EntryType::Application,
         score_boost: 0,
+        keywords,
+        categories,
     })
 }
 
@@ -206,6 +230,8 @@ pub fn create_file_entry(path: String) -> Option<AppEntry> {
         launch_count: 0,
         entry_type: EntryType::File,
         score_boost,
+        keywords: Vec::new(),
+        categories: Vec::new(),
     })
 }
 

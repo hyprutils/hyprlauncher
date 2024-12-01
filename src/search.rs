@@ -10,6 +10,8 @@ const BONUS_SCORE_LAUNCH_COUNT: i64 = 100;
 const BONUS_SCORE_ICON_NAME: i64 = 1000;
 const BONUS_SCORE_BINARY: i64 = 3000;
 const BONUS_SCORE_FOLDER: i64 = 2000;
+const BONUS_SCORE_KEYWORD_MATCH: i64 = 2500;
+const BONUS_SCORE_CATEGORY_MATCH: i64 = 2000;
 
 pub struct SearchResult {
     pub app: AppEntry,
@@ -55,12 +57,32 @@ pub async fn search_applications(
 
                 for app in cache.values() {
                     let name_lower = app.name.to_lowercase();
+                    let name_key = name_lower.clone();
+
                     if name_lower == query {
                         results.push(SearchResult {
                             app: app.clone(),
                             score: BONUS_SCORE_BINARY + calculate_bonus_score(app),
                         });
-                        seen_names.insert(name_lower);
+                        seen_names.insert(name_key);
+                        continue;
+                    }
+
+                    if app.keywords.iter().any(|k| k.to_lowercase() == query) {
+                        results.push(SearchResult {
+                            app: app.clone(),
+                            score: BONUS_SCORE_KEYWORD_MATCH + calculate_bonus_score(app),
+                        });
+                        seen_names.insert(name_key);
+                        continue;
+                    }
+
+                    if app.categories.iter().any(|c| c.to_lowercase() == query) {
+                        results.push(SearchResult {
+                            app: app.clone(),
+                            score: BONUS_SCORE_CATEGORY_MATCH + calculate_bonus_score(app),
+                        });
+                        seen_names.insert(name_key);
                         continue;
                     }
 
@@ -69,7 +91,30 @@ pub async fn search_applications(
                             app: app.clone(),
                             score: score + calculate_bonus_score(app),
                         });
-                        seen_names.insert(name_lower);
+                        seen_names.insert(name_key);
+                        continue;
+                    }
+
+                    for keyword in &app.keywords {
+                        if let Some(score) = matcher.fuzzy_match(&keyword.to_lowercase(), &query) {
+                            results.push(SearchResult {
+                                app: app.clone(),
+                                score: score + calculate_bonus_score(app),
+                            });
+                            seen_names.insert(name_key.clone());
+                            break;
+                        }
+                    }
+
+                    for category in &app.categories {
+                        if let Some(score) = matcher.fuzzy_match(&category.to_lowercase(), &query) {
+                            results.push(SearchResult {
+                                app: app.clone(),
+                                score: score + calculate_bonus_score(app),
+                            });
+                            seen_names.insert(name_key.clone());
+                            break;
+                        }
                     }
                 }
 
@@ -130,6 +175,8 @@ fn check_binary(query: &str) -> Option<SearchResult> {
                 launch_count: 0,
                 entry_type: EntryType::File,
                 score_boost: BONUS_SCORE_BINARY,
+                keywords: Vec::new(),
+                categories: Vec::new(),
             },
             score: BONUS_SCORE_BINARY,
         })
