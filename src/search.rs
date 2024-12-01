@@ -71,7 +71,20 @@ pub async fn search_applications(
                             app: app.clone(),
                             score: BONUS_SCORE_BINARY + calculate_bonus_score(app),
                         });
-                        seen_names.insert(name_key);
+                        seen_names.insert(name_key.clone());
+
+                        for action in &app.actions {
+                            let mut action_app = app.clone();
+                            action_app.name = format!("{} - {}", app.name, action.name);
+                            action_app.exec = action.exec.clone();
+                            if let Some(icon) = &action.icon_name {
+                                action_app.icon_name = icon.clone();
+                            }
+                            results.push(SearchResult {
+                                app: action_app,
+                                score: BONUS_SCORE_BINARY + calculate_bonus_score(app) - 100,
+                            });
+                        }
                         continue;
                     }
 
@@ -81,7 +94,7 @@ pub async fn search_applications(
                                 app: app.clone(),
                                 score: BONUS_SCORE_BINARY + calculate_bonus_score(app),
                             });
-                            seen_names.insert(name_key);
+                            seen_names.insert(name_key.clone());
                             continue;
                         }
 
@@ -100,7 +113,7 @@ pub async fn search_applications(
                             app: app.clone(),
                             score: BONUS_SCORE_KEYWORD_MATCH + calculate_bonus_score(app),
                         });
-                        seen_names.insert(name_key);
+                        seen_names.insert(name_key.clone());
                         continue;
                     }
 
@@ -109,7 +122,7 @@ pub async fn search_applications(
                             app: app.clone(),
                             score: BONUS_SCORE_CATEGORY_MATCH + calculate_bonus_score(app),
                         });
-                        seen_names.insert(name_key);
+                        seen_names.insert(name_key.clone());
                         continue;
                     }
 
@@ -118,7 +131,24 @@ pub async fn search_applications(
                             app: app.clone(),
                             score: score + calculate_bonus_score(app),
                         });
-                        seen_names.insert(name_key);
+
+                        for action in &app.actions {
+                            let action_name =
+                                format!("{} - {}", app.name, action.name).to_lowercase();
+                            if let Some(action_score) = matcher.fuzzy_match(&action_name, &query) {
+                                let mut action_app = app.clone();
+                                action_app.name = format!("{} - {}", app.name, action.name);
+                                action_app.exec = action.exec.clone();
+                                if let Some(icon) = &action.icon_name {
+                                    action_app.icon_name = icon.clone();
+                                }
+                                results.push(SearchResult {
+                                    app: action_app,
+                                    score: action_score + calculate_bonus_score(app) - 100,
+                                });
+                            }
+                        }
+                        seen_names.insert(name_key.clone());
                         continue;
                     }
 
@@ -205,6 +235,7 @@ fn check_binary(query: &str) -> Option<SearchResult> {
                 keywords: Vec::new(),
                 categories: Vec::new(),
                 terminal: false,
+                actions: Vec::new(),
             },
             score: BONUS_SCORE_BINARY,
         })

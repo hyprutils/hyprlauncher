@@ -9,6 +9,13 @@ pub static APP_CACHE: Lazy<RwLock<HashMap<String, AppEntry>>> =
     Lazy::new(|| RwLock::new(HashMap::with_capacity(2000)));
 
 #[derive(Clone, Debug)]
+pub struct DesktopAction {
+    pub name: String,
+    pub exec: String,
+    pub icon_name: Option<String>,
+}
+
+#[derive(Clone, Debug)]
 pub struct AppEntry {
     pub name: String,
     pub description: String,
@@ -21,6 +28,7 @@ pub struct AppEntry {
     pub keywords: Vec<String>,
     pub categories: Vec<String>,
     pub terminal: bool,
+    pub actions: Vec<DesktopAction>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
@@ -213,6 +221,25 @@ fn parse_desktop_entry(path: &std::path::Path) -> Option<AppEntry> {
 
     let terminal = section.attr("Terminal").map_or(false, |v| v == "true");
 
+    let mut actions = Vec::new();
+    if let Some(action_list) = section.attr("Actions") {
+        for action_name in action_list.split(';').filter(|s| !s.is_empty()) {
+            let section_name = format!("Desktop Action {}", action_name);
+            let action_section = entry.section(&section_name);
+            if let Some(action_exec) = action_section.attr("Exec") {
+                let action = DesktopAction {
+                    name: action_section
+                        .attr("Name")
+                        .unwrap_or(action_name)
+                        .to_string(),
+                    exec: action_exec.to_string(),
+                    icon_name: action_section.attr("Icon").map(String::from),
+                };
+                actions.push(action);
+            }
+        }
+    }
+
     Some(AppEntry {
         name,
         exec,
@@ -225,6 +252,7 @@ fn parse_desktop_entry(path: &std::path::Path) -> Option<AppEntry> {
         keywords,
         categories,
         terminal,
+        actions,
     })
 }
 
@@ -267,6 +295,7 @@ pub fn create_file_entry(path: String) -> Option<AppEntry> {
         keywords: Vec::new(),
         categories: Vec::new(),
         terminal: false,
+        actions: Vec::new(),
     })
 }
 
