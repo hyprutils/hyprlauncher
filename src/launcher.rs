@@ -190,7 +190,14 @@ fn parse_desktop_entry(path: &std::path::Path) -> Option<AppEntry> {
     }
 
     let name = String::from(section.attr("Name")?);
-    let exec = String::from(section.attr("Exec").unwrap_or_default());
+    let raw_exec = String::from(section.attr("Exec").unwrap_or_default());
+
+    let exec = raw_exec
+        .split_whitespace()
+        .filter(|&arg| !arg.starts_with('%'))
+        .collect::<Vec<_>>()
+        .join(" ");
+
     let icon = String::from(section.attr("Icon").unwrap_or("application-x-executable"));
     let desc = String::from(
         section
@@ -226,13 +233,19 @@ fn parse_desktop_entry(path: &std::path::Path) -> Option<AppEntry> {
         for action_name in action_list.split(';').filter(|s| !s.is_empty()) {
             let section_name = format!("Desktop Action {}", action_name);
             let action_section = entry.section(&section_name);
-            if let Some(action_exec) = action_section.attr("Exec") {
+            if let Some(raw_action_exec) = action_section.attr("Exec") {
+                let action_exec = raw_action_exec
+                    .split_whitespace()
+                    .filter(|&arg| !arg.starts_with('%'))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+
                 let action = DesktopAction {
                     name: action_section
                         .attr("Name")
                         .unwrap_or(action_name)
                         .to_string(),
-                    exec: action_exec.to_string(),
+                    exec: action_exec,
                     icon_name: action_section.attr("Icon").map(String::from),
                 };
                 actions.push(action);
