@@ -35,7 +35,29 @@ impl LauncherWindow {
 
         let search_start = std::time::Instant::now();
         let config = Config::load();
-        let initial_results = rt.block_on(async { search::search_applications("", &config).await });
+        let mut results = rt.block_on(async { search::search_applications("", &config).await });
+
+        if results.is_err() {
+            log!("Failed to load initial results, retrying...");
+            results = rt.block_on(async { search::search_applications("", &config).await });
+            if results.is_err() {
+                log!("Failed to load initial results after retry");
+            }
+        }
+
+        let mut results = results.unwrap_or_else(|_| Vec::new());
+
+        if results.is_empty() {
+            log!("Warning: Initial results list is empty");
+            rt.block_on(async { launcher::load_applications().await })
+                .ok();
+            if let Ok(retry_results) =
+                rt.block_on(async { search::search_applications("", &config).await })
+            {
+                results = retry_results;
+            }
+        }
+
         log!(
             "Initial search population ({:.3}ms)",
             search_start.elapsed().as_secs_f64() * 1000.0
@@ -227,7 +249,7 @@ impl LauncherWindow {
         );
 
         let app_data_store = Rc::new(RefCell::new(Vec::with_capacity(50)));
-        update_results_list(&list_view, initial_results.unwrap(), &app_data_store);
+        update_results_list(&list_view, results, &app_data_store);
 
         let launcher = Self {
             window,
@@ -247,6 +269,18 @@ impl LauncherWindow {
             "Presenting launcher window ({:.3}ms)",
             present_start.elapsed().as_secs_f64() * 1000.0
         );
+
+        if let Some(selection_model) = self.list_view.model().and_downcast::<SingleSelection>() {
+            if selection_model.n_items() == 0 {
+                let config = Config::load();
+                if let Ok(results) = self
+                    .rt
+                    .block_on(async { search::search_applications("", &config).await })
+                {
+                    update_results_list(&self.list_view, results, &self.app_data_store);
+                }
+            }
+        }
 
         self.window.present();
 
