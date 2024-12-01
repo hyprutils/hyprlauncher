@@ -177,6 +177,7 @@ fn check_binary(query: &str) -> Option<SearchResult> {
                 score_boost: BONUS_SCORE_BINARY,
                 keywords: Vec::new(),
                 categories: Vec::new(),
+                terminal: false,
             },
             score: BONUS_SCORE_BINARY,
         })

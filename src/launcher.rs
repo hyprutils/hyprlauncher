@@ -20,6 +20,7 @@ pub struct AppEntry {
     pub score_boost: i64,
     pub keywords: Vec<String>,
     pub categories: Vec<String>,
+    pub terminal: bool,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -210,6 +211,8 @@ fn parse_desktop_entry(path: &std::path::Path) -> Option<AppEntry> {
         })
         .unwrap_or_default();
 
+    let terminal = section.attr("Terminal").map_or(false, |v| v == "true");
+
     Some(AppEntry {
         name,
         exec,
@@ -221,6 +224,7 @@ fn parse_desktop_entry(path: &std::path::Path) -> Option<AppEntry> {
         score_boost: 0,
         keywords,
         categories,
+        terminal,
     })
 }
 
@@ -262,6 +266,7 @@ pub fn create_file_entry(path: String) -> Option<AppEntry> {
         score_boost,
         keywords: Vec::new(),
         categories: Vec::new(),
+        terminal: false,
     })
 }
 

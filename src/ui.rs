@@ -559,24 +559,26 @@ fn select_previous(list_view: &ListView) {
     }
 }
 
-fn launch_application(app: &AppEntry, search_entry: &SearchEntry) -> bool {
+fn launch_application(app: &AppEntry, search_entry: &gtk4::SearchEntry) -> bool {
+    if let Err(e) = launcher::increment_launch_count(app) {
+        log!("Failed to increment launch count: {}", e);
+    }
+
     match app.entry_type {
         EntryType::Application => {
             log!("Launching application: {}", app.name);
-            let exec = app
-                .exec
-                .replace("%f", "")
-                .replace("%F", "")
-                .replace("%u", "")
-                .replace("%U", "")
-                .replace("%i", "")
-                .replace("%c", &app.name)
-                .trim()
-                .to_string();
-
-            launcher::increment_launch_count(app).unwrap();
-
-            Command::new("sh").arg("-c").arg(&exec).spawn().is_ok()
+            if app.terminal {
+                let terminal = std::env::var("TERMINAL").unwrap_or_else(|_| "xterm".to_string());
+                Command::new(terminal)
+                    .arg("-e")
+                    .arg("sh")
+                    .arg("-c")
+                    .arg(&app.exec)
+                    .spawn()
+                    .is_ok()
+            } else {
+                Command::new("sh").arg("-c").arg(&app.exec).spawn().is_ok()
+            }
         }
         EntryType::File => {
             if app.icon_name == "folder" {
@@ -588,7 +590,6 @@ fn launch_application(app: &AppEntry, search_entry: &SearchEntry) -> bool {
                 };
                 search_entry.set_text(&path);
                 search_entry.set_position(-1);
-
                 false
             } else {
                 log!("Opening file: {}", app.path);
