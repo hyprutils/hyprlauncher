@@ -149,6 +149,7 @@ pub struct Config {
     pub window: Window,
     pub theme: Theme,
     pub debug: Debug,
+    pub finder: Finder,
 }
 
 #[allow(non_camel_case_types)]
@@ -229,6 +230,11 @@ impl Default for NavigateKeys {
             delete_word: String::from("h"),
         }
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
+pub struct Finder {
+    pub show_hidden: bool,
 }
 
 impl Config {

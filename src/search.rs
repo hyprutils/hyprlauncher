@@ -212,6 +212,7 @@ fn check_binary(query: &str) -> Option<SearchResult> {
 
 #[inline(always)]
 fn handle_path_search(query: &str) -> Vec<SearchResult> {
+    let config = Config::load();
     let expanded_path = shellexpand::full(query).unwrap_or(std::borrow::Cow::Borrowed(query));
     let path = std::path::Path::new(expanded_path.as_ref());
 
@@ -241,34 +242,33 @@ fn handle_path_search(query: &str) -> Vec<SearchResult> {
                 }
             }
 
-            let mut entries: Vec<_> = entries
-                .filter_map(Result::ok)
-                .filter_map(|entry| {
-                    let path = entry.path().to_string_lossy().into_owned();
-                    launcher::create_file_entry(path).map(|mut app| {
-                        let score = if app.icon_name == "folder" {
-                            BONUS_SCORE_FOLDER
-                        } else {
-                            BONUS_SCORE_ICON_NAME
-                        };
-                        app.score_boost = score;
-                        SearchResult { app, score }
-                    })
-                })
-                .collect();
+            for entry in entries.filter_map(Result::ok) {
+                let file_name = entry.file_name();
+                let file_name_str = file_name.to_string_lossy();
 
-            entries.sort_by(|a, b| {
-                let a_is_folder = a.app.icon_name == "folder";
-                let b_is_folder = b.app.icon_name == "folder";
-
-                match (a_is_folder, b_is_folder) {
-                    (true, false) => std::cmp::Ordering::Less,
-                    (false, true) => std::cmp::Ordering::Greater,
-                    _ => a.app.name.to_lowercase().cmp(&b.app.name.to_lowercase()),
+                if !config.finder.show_hidden
+                    && file_name_str.starts_with('.')
+                    && file_name_str != ".."
+                {
+                    continue;
                 }
-            });
 
-            results.extend(entries);
+                if let Some(app_entry) =
+                    launcher::create_file_entry(entry.path().to_string_lossy().into_owned())
+                {
+                    let score = if app_entry.icon_name == "folder" {
+                        BONUS_SCORE_FOLDER
+                    } else {
+                        0
+                    };
+                    results.push(SearchResult {
+                        app: app_entry,
+                        score,
+                    });
+                }
+            }
+
+            results.sort_unstable_by_key(|item| (-item.score, item.app.name.clone()));
             results
         })
         .unwrap_or_default()
