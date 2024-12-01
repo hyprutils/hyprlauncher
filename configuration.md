@@ -72,6 +72,10 @@ The configuration file controls the appearance and behavior of the launcher wind
   },
   "finder": {
     "show_hidden": false         // Show hidden files (dotfiles) in file browser
+  },
+  "dmenu": {
+    "allow_invalid": false,      // Allow invalid entries when no matches are found
+    "case_sensitive": false      // Enable case-sensitive matching
   }
 }
 ```
@@ -120,6 +124,14 @@ Navigation can be customized using the `custom_navigate_keys` setting:
 - `show_hidden`: Controls visibility of hidden files (dotfiles) in the file browser
   - When disabled (default), files and directories starting with `.` are hidden
   - The parent directory `..` is always shown regardless of this setting
+
+### Dmenu Mode
+- Alternative mode that mimics dmenu functionality
+- Launch with `--dmenu` or `-d` flag
+- Reads input lines from stdin and presents them in a searchable list
+- Configuration options:
+  - `allow_invalid`: When enabled, allows entering text that doesn't match any entry
+  - `case_sensitive`: When enabled, performs case-sensitive matching
 
 ## Hot Reloading
 The configuration file is watched for changes and will automatically reload when modified. No need to restart the application.

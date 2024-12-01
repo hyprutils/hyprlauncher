@@ -334,3 +334,49 @@ fn handle_path_search(query: &str) -> Vec<SearchResult> {
         })
         .unwrap_or_default()
 }
+
+pub async fn search_dmenu(
+    query: String,
+    lines: Vec<String>,
+    config: Config,
+) -> Result<Vec<String>, std::io::Error> {
+    let (tx, rx) = oneshot::channel();
+    let query = if config.dmenu.case_sensitive {
+        query
+    } else {
+        query.to_lowercase()
+    };
+    let max_results = config.window.max_entries;
+
+    tokio::task::spawn_blocking(move || {
+        let matcher = SkimMatcherV2::default().smart_case();
+        let mut results: Vec<(String, i64)> = lines
+            .iter()
+            .filter_map(|line| {
+                let compare_line = if config.dmenu.case_sensitive {
+                    line.clone()
+                } else {
+                    line.to_lowercase()
+                };
+
+                matcher
+                    .fuzzy_match(&compare_line, &query)
+                    .map(|score| (line.clone(), score))
+            })
+            .collect();
+
+        if results.is_empty() && config.dmenu.allow_invalid {
+            results.push((query, 0));
+        }
+
+        results.sort_unstable_by_key(|&(_, score)| -score);
+        results.truncate(max_results);
+
+        let results = results.into_iter().map(|(line, _)| line).collect();
+        tx.send(results)
+            .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Failed to send results"))
+    });
+
+    rx.await
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Failed to receive results"))
+}

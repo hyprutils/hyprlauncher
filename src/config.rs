@@ -150,6 +150,7 @@ pub struct Config {
     pub theme: Theme,
     pub debug: Debug,
     pub finder: Finder,
+    pub dmenu: Dmenu,
 }
 
 #[allow(non_camel_case_types)]
@@ -235,6 +236,12 @@ impl Default for NavigateKeys {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
 pub struct Finder {
     pub show_hidden: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
+pub struct Dmenu {
+    pub allow_invalid: bool,
+    pub case_sensitive: bool,
 }
 
 impl Config {

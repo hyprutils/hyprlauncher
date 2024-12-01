@@ -18,6 +18,7 @@ use tokio::runtime::Runtime;
 pub struct App {
     app: Application,
     rt: Runtime,
+    entries: Option<Vec<String>>,
 }
 
 impl App {
@@ -48,9 +49,9 @@ impl App {
         app.register(None::<&gtk4::gio::Cancellable>)
             .expect("Failed to register application");
 
-        let (tx, rx) = mpsc::channel();
+        let (_tx, rx) = mpsc::channel::<()>();
         crate::config::Config::watch_changes(move || {
-            let _ = tx.send(());
+            let _ = _tx.send(());
         });
 
         let app_clone = app.clone();
@@ -93,18 +94,63 @@ impl App {
             );
         }
 
-        Self { app, rt }
+        Self {
+            app,
+            rt,
+            entries: None,
+        }
+    }
+
+    pub fn new_dmenu(entries: Vec<String>) -> Self {
+        log!("Initializing dmenu application runtime...");
+        let rt = Runtime::new().expect("Failed to create Tokio runtime");
+
+        log!("Creating new dmenu application instance");
+        let app = Application::builder()
+            .application_id("hyprutils.hyprlauncher.dmenu")
+            .flags(
+                gtk4::gio::ApplicationFlags::NON_UNIQUE
+                    | gtk4::gio::ApplicationFlags::HANDLES_COMMAND_LINE,
+            )
+            .build();
+
+        app.register(None::<&gtk4::gio::Cancellable>)
+            .expect("Failed to register application");
+
+        let rt_handle = rt.handle().clone();
+        let entries_clone = entries.clone();
+
+        app.connect_activate(move |app| {
+            let window = LauncherWindow::new_dmenu(app, rt_handle.clone(), entries_clone.clone());
+            window.present();
+        });
+
+        app.connect_command_line(|app, _cmdline| {
+            app.activate();
+            0
+        });
+
+        Self {
+            app,
+            rt,
+            entries: Some(entries),
+        }
     }
 
     pub fn run(&self) -> i32 {
         let rt_handle = self.rt.handle().clone();
+        let entries = self.entries.clone();
 
         self.app.connect_activate(move |app| {
             let windows = app.windows();
             if let Some(window) = windows.first() {
                 window.present();
             } else {
-                let window = LauncherWindow::new(app, rt_handle.clone());
+                let window = if let Some(entries) = &entries {
+                    LauncherWindow::new_dmenu(app, rt_handle.clone(), entries.clone())
+                } else {
+                    LauncherWindow::new(app, rt_handle.clone())
+                };
                 window.present();
             }
         });
