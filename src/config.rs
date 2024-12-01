@@ -149,6 +149,8 @@ pub struct Config {
     pub window: Window,
     pub theme: Theme,
     pub debug: Debug,
+    pub finder: Finder,
+    pub dmenu: Dmenu,
 }
 
 #[allow(non_camel_case_types)]
@@ -229,6 +231,17 @@ impl Default for NavigateKeys {
             delete_word: String::from("h"),
         }
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
+pub struct Finder {
+    pub show_hidden: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
+pub struct Dmenu {
+    pub allow_invalid: bool,
+    pub case_sensitive: bool,
 }
 
 impl Config {
@@ -361,9 +374,11 @@ impl Config {
                     caret-color: @theme_text_color;
                     font-size: {}px;
                     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+                    outline: none;
                 }}
                 entry:focus {{
                     background-color: @theme_base_color;
+                    outline: none;
                 }}
                 .app-name {{
                     color: @theme_text_color;
@@ -441,9 +456,11 @@ impl Config {
                     caret-color: {};
                     font-size: {}px;
                     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+                    outline: none;
                 }}
                 entry:focus {{
                     background-color: {};
+                    outline: none;
                 }}
                 .app-name {{
                     color: {};

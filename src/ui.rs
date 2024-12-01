@@ -1,7 +1,8 @@
 use crate::{
     config::{Config, WindowAnchor},
-    launcher::{self, AppEntry, EntryType},
-    log, search,
+    launcher::{self, AppEntry, EntryType, APP_CACHE},
+    log,
+    search::{self, SearchResult},
 };
 use gtk4::{
     gdk::Key,
@@ -35,7 +36,29 @@ impl LauncherWindow {
 
         let search_start = std::time::Instant::now();
         let config = Config::load();
-        let initial_results = rt.block_on(async { search::search_applications("", &config).await });
+        let mut results = rt.block_on(async { search::search_applications("", &config).await });
+
+        if results.is_err() {
+            log!("Failed to load initial results, retrying...");
+            results = rt.block_on(async { search::search_applications("", &config).await });
+            if results.is_err() {
+                log!("Failed to load initial results after retry");
+            }
+        }
+
+        let mut results = results.unwrap_or_else(|_| Vec::new());
+
+        if results.is_empty() {
+            log!("Warning: Initial results list is empty");
+            rt.block_on(async { launcher::load_applications().await })
+                .ok();
+            if let Ok(retry_results) =
+                rt.block_on(async { search::search_applications("", &config).await })
+            {
+                results = retry_results;
+            }
+        }
+
         log!(
             "Initial search population ({:.3}ms)",
             search_start.elapsed().as_secs_f64() * 1000.0
@@ -49,7 +72,8 @@ impl LauncherWindow {
             .build();
 
         window.init_layer_shell();
-        window.set_layer(Layer::Top);
+        window.set_layer(Layer::Overlay);
+        window.set_namespace("hyprlauncher");
         window.set_keyboard_mode(if config.debug.disable_auto_focus {
             KeyboardMode::OnDemand
         } else {
@@ -227,7 +251,7 @@ impl LauncherWindow {
         );
 
         let app_data_store = Rc::new(RefCell::new(Vec::with_capacity(50)));
-        update_results_list(&list_view, initial_results.unwrap(), &app_data_store);
+        update_results_list(&list_view, results, &app_data_store);
 
         let launcher = Self {
             window,
@@ -241,12 +265,134 @@ impl LauncherWindow {
         launcher
     }
 
+    pub fn new_dmenu(app: &Application, rt: Handle, entries: Vec<String>) -> Self {
+        let window_start = std::time::Instant::now();
+        log!(
+            "Creating dmenu launcher window ({:.3}ms)",
+            window_start.elapsed().as_secs_f64() * 1000.0
+        );
+
+        let config = Config::load();
+        let window = ApplicationWindow::builder()
+            .application(app)
+            .title("HyprLauncher")
+            .default_width(config.window.width)
+            .default_height(config.window.height)
+            .build();
+
+        window.init_layer_shell();
+        window.set_layer(Layer::Overlay);
+        window.set_namespace("hyprlauncher");
+        window.set_keyboard_mode(if config.debug.disable_auto_focus {
+            KeyboardMode::OnDemand
+        } else {
+            KeyboardMode::Exclusive
+        });
+        Self::setup_window_anchoring(&window, &config);
+        Self::apply_window_margins(&window, &config);
+
+        let main_box = GtkBox::new(Orientation::Vertical, 0);
+        let search_entry = SearchEntry::new();
+        let scrolled = ScrolledWindow::new();
+
+        let model = gio::ListStore::new::<AppEntryObject>();
+        let selection_model = SingleSelection::new(Some(model.clone()));
+        let factory = SignalListItemFactory::new();
+        let list_view = ListView::new(Some(selection_model.clone()), Some(factory.clone()));
+
+        factory.connect_setup(move |_, list_item| {
+            let label = Label::builder()
+                .halign(gtk4::Align::Start)
+                .margin_start(12)
+                .margin_end(12)
+                .margin_top(6)
+                .margin_bottom(6)
+                .build();
+            list_item.set_child(Some(&label));
+        });
+
+        factory.connect_bind(move |_, list_item| {
+            if let Some(entry) = list_item.item().and_downcast::<AppEntryObject>() {
+                if let Some(label) = list_item.child().and_downcast::<Label>() {
+                    label.set_text(entry.imp().name());
+                }
+            }
+        });
+
+        scrolled.set_vexpand(true);
+        scrolled.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::External);
+        list_view.set_single_click_activate(true);
+
+        scrolled.set_child(Some(&list_view));
+        main_box.append(&search_entry);
+        main_box.append(&scrolled);
+        window.set_child(Some(&main_box));
+
+        let css_provider = CssProvider::new();
+        css_provider.load_from_data(&config.get_css());
+        if let Some(native) = window.native() {
+            gtk4::style_context_add_provider_for_display(
+                &native.display(),
+                &css_provider,
+                STYLE_PROVIDER_PRIORITY_USER,
+            );
+        }
+
+        let app_data_store = Rc::new(RefCell::new(Vec::new()));
+        let initial_entries: Vec<_> = entries
+            .into_iter()
+            .map(|entry| AppEntry {
+                name: entry.clone(),
+                description: String::new(),
+                path: String::new(),
+                exec: entry,
+                icon_name: String::new(),
+                launch_count: 0,
+                entry_type: EntryType::File,
+                score_boost: 0,
+                keywords: Vec::new(),
+                categories: Vec::new(),
+                terminal: false,
+                actions: Vec::new(),
+            })
+            .map(|entry| SearchResult {
+                app: entry,
+                score: 0,
+            })
+            .collect();
+
+        update_results_list(&list_view, initial_entries, &app_data_store);
+
+        let launcher = Self {
+            window,
+            search_entry,
+            list_view,
+            app_data_store,
+            rt,
+        };
+
+        launcher.setup_dmenu_signals();
+        launcher
+    }
+
     pub fn present(&self) {
         let present_start = std::time::Instant::now();
         log!(
             "Presenting launcher window ({:.3}ms)",
             present_start.elapsed().as_secs_f64() * 1000.0
         );
+
+        if let Some(selection_model) = self.list_view.model().and_downcast::<SingleSelection>() {
+            if selection_model.n_items() == 0 {
+                let config = Config::load();
+                if let Ok(results) = self
+                    .rt
+                    .block_on(async { search::search_applications("", &config).await })
+                {
+                    update_results_list(&self.list_view, results, &self.app_data_store);
+                }
+            }
+        }
 
         self.window.present();
 
@@ -491,6 +637,128 @@ impl LauncherWindow {
             }
         }
     }
+
+    fn setup_dmenu_signals(&self) {
+        let window_clone = self.window.clone();
+        let list_view_clone = self.list_view.clone();
+        let app_data_store_clone = self.app_data_store.clone();
+        let rt_handle = self.rt.clone();
+
+        let initial_entries: Vec<String> = app_data_store_clone
+            .borrow()
+            .iter()
+            .map(|e| e.name.clone())
+            .collect();
+
+        self.search_entry.connect_changed(move |entry| {
+            let query = entry.text().to_string();
+            let list_view = list_view_clone.clone();
+            let app_data_store = app_data_store_clone.clone();
+            let rt = rt_handle.clone();
+            let config = Config::load();
+            let entries = initial_entries.clone();
+
+            glib::MainContext::default().spawn_local(async move {
+                let results = if query.is_empty() {
+                    entries
+                } else {
+                    rt.spawn(async move { search::search_dmenu(query, entries, config).await })
+                        .await
+                        .unwrap()
+                        .unwrap_or_default()
+                };
+
+                let search_results: Vec<SearchResult> = results
+                    .into_iter()
+                    .map(|name| SearchResult {
+                        app: AppEntry {
+                            name: name.clone(),
+                            description: String::new(),
+                            path: String::new(),
+                            exec: name,
+                            icon_name: String::new(),
+                            launch_count: 0,
+                            entry_type: EntryType::File,
+                            score_boost: 0,
+                            keywords: Vec::new(),
+                            categories: Vec::new(),
+                            terminal: false,
+                            actions: Vec::new(),
+                        },
+                        score: 0,
+                    })
+                    .collect();
+                update_results_list(&list_view, search_results, &app_data_store);
+            });
+        });
+
+        let window_for_search = self.window.clone();
+        let search_controller = gtk4::EventControllerKey::new();
+        search_controller.connect_key_pressed(move |_, key, _, _| match key {
+            Key::Escape => {
+                window_for_search.destroy();
+                glib::Propagation::Stop
+            }
+            _ => glib::Propagation::Proceed,
+        });
+        self.search_entry.add_controller(search_controller);
+
+        self.list_view.connect_activate(move |list_view, position| {
+            if let Some(model) = list_view.model() {
+                if let Some(item) = model.item(position) {
+                    if let Some(app_entry) = item.downcast_ref::<AppEntryObject>() {
+                        println!("{}", app_entry.imp().name());
+                        window_clone.destroy();
+                    }
+                }
+            }
+        });
+
+        let window_clone_activate = self.window.clone();
+        let list_view_clone_activate = self.list_view.clone();
+
+        self.search_entry.connect_activate(move |_| {
+            if let Some(selected) = get_selected_item(&list_view_clone_activate) {
+                println!("{}", selected.imp().name());
+                window_clone_activate.destroy();
+            }
+        });
+
+        let window_clone_key = self.window.clone();
+        let list_view_clone_key = self.list_view.clone();
+        let key_controller = gtk4::EventControllerKey::new();
+
+        key_controller.connect_key_pressed(move |_, key, _, _| match key {
+            Key::Escape => {
+                window_clone_key.destroy();
+                glib::Propagation::Stop
+            }
+            Key::Return | Key::KP_Enter => {
+                if let Some(selected) = get_selected_item(&list_view_clone_key) {
+                    println!("{}", selected.imp().name());
+                    window_clone_key.destroy();
+                }
+                glib::Propagation::Stop
+            }
+            Key::Up => {
+                select_previous(&list_view_clone_key);
+                glib::Propagation::Stop
+            }
+            Key::Down => {
+                select_next(&list_view_clone_key);
+                glib::Propagation::Stop
+            }
+            _ => glib::Propagation::Proceed,
+        });
+
+        self.window.add_controller(key_controller);
+
+        let window_clone_close = self.window.clone();
+        self.window.connect_close_request(move |_| {
+            window_clone_close.destroy();
+            glib::Propagation::Stop
+        });
+    }
 }
 
 fn update_results_list(
@@ -559,43 +827,61 @@ fn select_previous(list_view: &ListView) {
     }
 }
 
-fn launch_application(app: &AppEntry, search_entry: &SearchEntry) -> bool {
-    match app.entry_type {
-        EntryType::Application => {
-            log!("Launching application: {}", app.name);
-            let exec = app
-                .exec
-                .replace("%f", "")
-                .replace("%F", "")
-                .replace("%u", "")
-                .replace("%U", "")
-                .replace("%i", "")
-                .replace("%c", &app.name)
-                .trim()
-                .to_string();
+fn launch_application(app: &AppEntry, search_entry: &gtk4::SearchEntry) -> bool {
+    let mut success = false;
 
-            launcher::increment_launch_count(app).unwrap();
-
-            Command::new("sh").arg("-c").arg(&exec).spawn().is_ok()
+    if let Ok(new_count) = launcher::increment_launch_count(app) {
+        let app_name = app.name.clone();
+        let mut cache = APP_CACHE.blocking_write();
+        if let Some(cached_app) = cache.get_mut(&app_name) {
+            cached_app.launch_count = new_count;
         }
-        EntryType::File => {
-            if app.icon_name == "folder" {
-                log!("Opening folder: {}", app.path);
-                let path = if app.path.ends_with('/') {
-                    app.path.clone()
-                } else {
-                    format!("{}/", app.path)
-                };
-                search_entry.set_text(&path);
-                search_entry.set_position(-1);
 
-                false
-            } else {
-                log!("Opening file: {}", app.path);
-                Command::new("sh").arg("-c").arg(&app.exec).spawn().is_ok()
+        match app.entry_type {
+            EntryType::Application => {
+                log!("Launching application: {}", app.name);
+                if app.terminal {
+                    let terminal =
+                        std::env::var("TERMINAL").unwrap_or_else(|_| "xterm".to_string());
+                    success = Command::new(terminal)
+                        .arg("-e")
+                        .arg("sh")
+                        .arg("-c")
+                        .arg(&app.exec)
+                        .spawn()
+                        .is_ok()
+                } else {
+                    success = Command::new("sh").arg("-c").arg(&app.exec).spawn().is_ok()
+                }
+                if success {
+                    search_entry.set_text("__refresh__");
+                    search_entry.set_text("");
+                }
+            }
+            EntryType::File => {
+                if app.icon_name == "folder" {
+                    log!("Opening folder: {}", app.path);
+                    let path = if app.path.ends_with('/') {
+                        app.path.clone()
+                    } else {
+                        format!("{}/", app.path)
+                    };
+                    search_entry.set_text(&path);
+                    search_entry.set_position(-1);
+                    success = true;
+                } else {
+                    log!("Opening file: {}", app.path);
+                    success = Command::new("sh").arg("-c").arg(&app.exec).spawn().is_ok();
+                    if success {
+                        search_entry.set_text("__refresh__");
+                        search_entry.set_text("");
+                    }
+                }
             }
         }
     }
+
+    success && (app.entry_type != EntryType::File || app.icon_name != "folder")
 }
 
 trait WindowAnchoring {

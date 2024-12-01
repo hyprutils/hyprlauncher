@@ -9,6 +9,13 @@ pub static APP_CACHE: Lazy<RwLock<HashMap<String, AppEntry>>> =
     Lazy::new(|| RwLock::new(HashMap::with_capacity(2000)));
 
 #[derive(Clone, Debug)]
+pub struct DesktopAction {
+    pub name: String,
+    pub exec: String,
+    pub icon_name: Option<String>,
+}
+
+#[derive(Clone, Debug)]
 pub struct AppEntry {
     pub name: String,
     pub description: String,
@@ -18,9 +25,13 @@ pub struct AppEntry {
     pub launch_count: u32,
     pub entry_type: EntryType,
     pub score_boost: i64,
+    pub keywords: Vec<String>,
+    pub categories: Vec<String>,
+    pub terminal: bool,
+    pub actions: Vec<DesktopAction>,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub enum EntryType {
     Application,
     File,
@@ -38,7 +49,7 @@ static DESKTOP_PATHS: &[&str] = &[
 
 const DEFAULT_SCORE_BOOST: i64 = 2000;
 
-pub fn increment_launch_count(app: &AppEntry) -> Result<(), std::io::Error> {
+pub fn increment_launch_count(app: &AppEntry) -> Result<u32, std::io::Error> {
     let app_name = app.name.clone();
     let count = app.launch_count + 1;
 
@@ -46,7 +57,7 @@ pub fn increment_launch_count(app: &AppEntry) -> Result<(), std::io::Error> {
         save_heatmap(&app_name, count).unwrap();
     });
 
-    Ok(())
+    Ok(count)
 }
 
 #[inline]
@@ -148,6 +159,36 @@ fn parse_desktop_entry(path: &std::path::Path) -> Option<AppEntry> {
         return None;
     }
 
+    let current_desktop = std::env::var("XDG_CURRENT_DESKTOP")
+        .unwrap_or_default()
+        .to_uppercase();
+    let desktops: Vec<String> = current_desktop
+        .split(':')
+        .map(|s| s.to_uppercase())
+        .collect();
+
+    if let Some(only_show_in) = section.attr("OnlyShowIn") {
+        let allowed_desktops: Vec<String> = only_show_in
+            .split(';')
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_uppercase())
+            .collect();
+        if !desktops.iter().any(|d| allowed_desktops.contains(d)) {
+            return None;
+        }
+    }
+
+    if let Some(not_show_in) = section.attr("NotShowIn") {
+        let excluded_desktops: Vec<String> = not_show_in
+            .split(';')
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_uppercase())
+            .collect();
+        if desktops.iter().any(|d| excluded_desktops.contains(d)) {
+            return None;
+        }
+    }
+
     let name = String::from(section.attr("Name")?);
     let exec = String::from(section.attr("Exec").unwrap_or_default());
     let icon = String::from(section.attr("Icon").unwrap_or("application-x-executable"));
@@ -158,6 +199,47 @@ fn parse_desktop_entry(path: &std::path::Path) -> Option<AppEntry> {
             .unwrap_or(""),
     );
 
+    let keywords = section
+        .attr("Keywords")
+        .map(|k| {
+            k.split(';')
+                .filter(|s| !s.is_empty())
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let categories = section
+        .attr("Categories")
+        .map(|c| {
+            c.split(';')
+                .filter(|s| !s.is_empty())
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let terminal = section.attr("Terminal").map_or(false, |v| v == "true");
+
+    let mut actions = Vec::new();
+    if let Some(action_list) = section.attr("Actions") {
+        for action_name in action_list.split(';').filter(|s| !s.is_empty()) {
+            let section_name = format!("Desktop Action {}", action_name);
+            let action_section = entry.section(&section_name);
+            if let Some(action_exec) = action_section.attr("Exec") {
+                let action = DesktopAction {
+                    name: action_section
+                        .attr("Name")
+                        .unwrap_or(action_name)
+                        .to_string(),
+                    exec: action_exec.to_string(),
+                    icon_name: action_section.attr("Icon").map(String::from),
+                };
+                actions.push(action);
+            }
+        }
+    }
+
     Some(AppEntry {
         name,
         exec,
@@ -167,6 +249,10 @@ fn parse_desktop_entry(path: &std::path::Path) -> Option<AppEntry> {
         launch_count: 0,
         entry_type: EntryType::Application,
         score_boost: 0,
+        keywords,
+        categories,
+        terminal,
+        actions,
     })
 }
 
@@ -206,6 +292,10 @@ pub fn create_file_entry(path: String) -> Option<AppEntry> {
         launch_count: 0,
         entry_type: EntryType::File,
         score_boost,
+        keywords: Vec::new(),
+        categories: Vec::new(),
+        terminal: false,
+        actions: Vec::new(),
     })
 }
 

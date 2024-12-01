@@ -10,10 +10,19 @@ const BONUS_SCORE_LAUNCH_COUNT: i64 = 100;
 const BONUS_SCORE_ICON_NAME: i64 = 1000;
 const BONUS_SCORE_BINARY: i64 = 3000;
 const BONUS_SCORE_FOLDER: i64 = 2000;
+const BONUS_SCORE_KEYWORD_MATCH: i64 = 2500;
+const BONUS_SCORE_CATEGORY_MATCH: i64 = 2000;
 
 pub struct SearchResult {
     pub app: AppEntry,
     pub score: i64,
+}
+
+fn get_filename_without_extension(path: &str) -> Option<String> {
+    std::path::Path::new(path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_lowercase())
 }
 
 pub async fn search_applications(
@@ -55,12 +64,65 @@ pub async fn search_applications(
 
                 for app in cache.values() {
                     let name_lower = app.name.to_lowercase();
+                    let name_key = name_lower.clone();
+
                     if name_lower == query {
                         results.push(SearchResult {
                             app: app.clone(),
                             score: BONUS_SCORE_BINARY + calculate_bonus_score(app),
                         });
-                        seen_names.insert(name_lower);
+                        seen_names.insert(name_key.clone());
+
+                        for action in &app.actions {
+                            let mut action_app = app.clone();
+                            action_app.name = format!("{} - {}", app.name, action.name);
+                            action_app.exec = action.exec.clone();
+                            if let Some(icon) = &action.icon_name {
+                                action_app.icon_name = icon.clone();
+                            }
+                            results.push(SearchResult {
+                                app: action_app,
+                                score: BONUS_SCORE_BINARY + calculate_bonus_score(app) - 100,
+                            });
+                        }
+                        continue;
+                    }
+
+                    if let Some(filename) = get_filename_without_extension(&app.path) {
+                        if filename == query {
+                            results.push(SearchResult {
+                                app: app.clone(),
+                                score: BONUS_SCORE_BINARY + calculate_bonus_score(app),
+                            });
+                            seen_names.insert(name_key.clone());
+                            continue;
+                        }
+
+                        if let Some(score) = matcher.fuzzy_match(&filename, &query) {
+                            results.push(SearchResult {
+                                app: app.clone(),
+                                score: score + calculate_bonus_score(app),
+                            });
+                            seen_names.insert(name_key.clone());
+                            continue;
+                        }
+                    }
+
+                    if app.keywords.iter().any(|k| k.to_lowercase() == query) {
+                        results.push(SearchResult {
+                            app: app.clone(),
+                            score: BONUS_SCORE_KEYWORD_MATCH + calculate_bonus_score(app),
+                        });
+                        seen_names.insert(name_key.clone());
+                        continue;
+                    }
+
+                    if app.categories.iter().any(|c| c.to_lowercase() == query) {
+                        results.push(SearchResult {
+                            app: app.clone(),
+                            score: BONUS_SCORE_CATEGORY_MATCH + calculate_bonus_score(app),
+                        });
+                        seen_names.insert(name_key.clone());
                         continue;
                     }
 
@@ -69,7 +131,47 @@ pub async fn search_applications(
                             app: app.clone(),
                             score: score + calculate_bonus_score(app),
                         });
-                        seen_names.insert(name_lower);
+
+                        for action in &app.actions {
+                            let action_name =
+                                format!("{} - {}", app.name, action.name).to_lowercase();
+                            if let Some(action_score) = matcher.fuzzy_match(&action_name, &query) {
+                                let mut action_app = app.clone();
+                                action_app.name = format!("{} - {}", app.name, action.name);
+                                action_app.exec = action.exec.clone();
+                                if let Some(icon) = &action.icon_name {
+                                    action_app.icon_name = icon.clone();
+                                }
+                                results.push(SearchResult {
+                                    app: action_app,
+                                    score: action_score + calculate_bonus_score(app) - 100,
+                                });
+                            }
+                        }
+                        seen_names.insert(name_key.clone());
+                        continue;
+                    }
+
+                    for keyword in &app.keywords {
+                        if let Some(score) = matcher.fuzzy_match(&keyword.to_lowercase(), &query) {
+                            results.push(SearchResult {
+                                app: app.clone(),
+                                score: score + calculate_bonus_score(app),
+                            });
+                            seen_names.insert(name_key.clone());
+                            break;
+                        }
+                    }
+
+                    for category in &app.categories {
+                        if let Some(score) = matcher.fuzzy_match(&category.to_lowercase(), &query) {
+                            results.push(SearchResult {
+                                app: app.clone(),
+                                score: score + calculate_bonus_score(app),
+                            });
+                            seen_names.insert(name_key.clone());
+                            break;
+                        }
                     }
                 }
 
@@ -130,6 +232,10 @@ fn check_binary(query: &str) -> Option<SearchResult> {
                 launch_count: 0,
                 entry_type: EntryType::File,
                 score_boost: BONUS_SCORE_BINARY,
+                keywords: Vec::new(),
+                categories: Vec::new(),
+                terminal: false,
+                actions: Vec::new(),
             },
             score: BONUS_SCORE_BINARY,
         })
@@ -137,21 +243,30 @@ fn check_binary(query: &str) -> Option<SearchResult> {
 
 #[inline(always)]
 fn handle_path_search(query: &str) -> Vec<SearchResult> {
+    let config = Config::load();
     let expanded_path = shellexpand::full(query).unwrap_or(std::borrow::Cow::Borrowed(query));
     let path = std::path::Path::new(expanded_path.as_ref());
 
-    let dir = if path.is_dir() {
-        path.to_path_buf()
+    let (dir, filter) = if path.is_dir() {
+        (path.to_path_buf(), String::new())
     } else {
-        path.parent()
-            .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| PathBuf::from("/"))
+        (
+            path.parent()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| PathBuf::from("/")),
+            path.file_name()
+                .map(|f| f.to_string_lossy().to_lowercase())
+                .unwrap_or_default(),
+        )
     };
+
+    let matcher = SkimMatcherV2::default().smart_case();
 
     std::fs::read_dir(&dir)
         .ok()
         .map(|entries| {
             let mut results: Vec<SearchResult> = Vec::new();
+            let mut parent_entry = None;
 
             if let Some(parent_dir) = dir.parent() {
                 if let Some(mut app_entry) =
@@ -159,42 +274,109 @@ fn handle_path_search(query: &str) -> Vec<SearchResult> {
                 {
                     app_entry.name = String::from("..");
                     app_entry.score_boost = BONUS_SCORE_FOLDER;
-                    results.push(SearchResult {
+                    parent_entry = Some(SearchResult {
                         app: app_entry,
-                        score: BONUS_SCORE_FOLDER,
+                        score: i64::MAX,
                     });
                 }
             }
 
-            let mut entries: Vec<_> = entries
-                .filter_map(Result::ok)
-                .filter_map(|entry| {
-                    let path = entry.path().to_string_lossy().into_owned();
-                    launcher::create_file_entry(path).map(|mut app| {
-                        let score = if app.icon_name == "folder" {
-                            BONUS_SCORE_FOLDER
-                        } else {
-                            BONUS_SCORE_ICON_NAME
-                        };
-                        app.score_boost = score;
-                        SearchResult { app, score }
-                    })
-                })
-                .collect();
+            for entry in entries.filter_map(Result::ok) {
+                let file_name = entry.file_name();
+                let file_name_str = file_name.to_string_lossy();
+                let file_name_lower = file_name_str.to_lowercase();
 
-            entries.sort_by(|a, b| {
-                let a_is_folder = a.app.icon_name == "folder";
-                let b_is_folder = b.app.icon_name == "folder";
-
-                match (a_is_folder, b_is_folder) {
-                    (true, false) => std::cmp::Ordering::Less,
-                    (false, true) => std::cmp::Ordering::Greater,
-                    _ => a.app.name.to_lowercase().cmp(&b.app.name.to_lowercase()),
+                if !config.finder.show_hidden
+                    && file_name_str.starts_with('.')
+                    && file_name_str != ".."
+                {
+                    continue;
                 }
-            });
 
-            results.extend(entries);
+                if !filter.is_empty() {
+                    if let Some(score) = matcher.fuzzy_match(&file_name_lower, &filter) {
+                        if let Some(app_entry) =
+                            launcher::create_file_entry(entry.path().to_string_lossy().into_owned())
+                        {
+                            let base_score = if app_entry.icon_name == "folder" {
+                                BONUS_SCORE_FOLDER
+                            } else {
+                                0
+                            };
+                            results.push(SearchResult {
+                                app: app_entry,
+                                score: score + base_score,
+                            });
+                        }
+                    }
+                } else if let Some(app_entry) =
+                    launcher::create_file_entry(entry.path().to_string_lossy().into_owned())
+                {
+                    let score = if app_entry.icon_name == "folder" {
+                        BONUS_SCORE_FOLDER
+                    } else {
+                        0
+                    };
+                    results.push(SearchResult {
+                        app: app_entry,
+                        score,
+                    });
+                }
+            }
+
+            results.sort_unstable_by_key(|item| (-item.score, item.app.name.clone()));
+
+            if let Some(parent) = parent_entry {
+                results.insert(0, parent);
+            }
+
             results
         })
         .unwrap_or_default()
+}
+
+pub async fn search_dmenu(
+    query: String,
+    lines: Vec<String>,
+    config: Config,
+) -> Result<Vec<String>, std::io::Error> {
+    let (tx, rx) = oneshot::channel();
+    let query = if config.dmenu.case_sensitive {
+        query
+    } else {
+        query.to_lowercase()
+    };
+    let max_results = config.window.max_entries;
+
+    tokio::task::spawn_blocking(move || {
+        let matcher = SkimMatcherV2::default().smart_case();
+        let mut results: Vec<(String, i64)> = lines
+            .iter()
+            .filter_map(|line| {
+                let compare_line = if config.dmenu.case_sensitive {
+                    line.clone()
+                } else {
+                    line.to_lowercase()
+                };
+
+                matcher
+                    .fuzzy_match(&compare_line, &query)
+                    .map(|score| (line.clone(), score))
+            })
+            .collect();
+
+        if results.is_empty() && config.dmenu.allow_invalid {
+            results.push((query, 0));
+        }
+
+        results.sort_unstable_by_key(|&(_, score)| -score);
+        results.truncate(max_results);
+
+        let results = results.into_iter().map(|(line, _)| line).collect();
+        tx.send(results)
+            .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Failed to send results"))
+    });
+
+    rx.await
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Failed to receive results"))
 }
