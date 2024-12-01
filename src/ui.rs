@@ -620,6 +620,10 @@ fn launch_application(app: &AppEntry, search_entry: &gtk4::SearchEntry) -> bool 
                 } else {
                     success = Command::new("sh").arg("-c").arg(&app.exec).spawn().is_ok()
                 }
+                if success {
+                    search_entry.set_text("__refresh__");
+                    search_entry.set_text("");
+                }
             }
             EntryType::File => {
                 if app.icon_name == "folder" {
@@ -631,20 +635,20 @@ fn launch_application(app: &AppEntry, search_entry: &gtk4::SearchEntry) -> bool 
                     };
                     search_entry.set_text(&path);
                     search_entry.set_position(-1);
+                    success = true;
                 } else {
                     log!("Opening file: {}", app.path);
-                    success = Command::new("sh").arg("-c").arg(&app.exec).spawn().is_ok()
+                    success = Command::new("sh").arg("-c").arg(&app.exec).spawn().is_ok();
+                    if success {
+                        search_entry.set_text("__refresh__");
+                        search_entry.set_text("");
+                    }
                 }
             }
         }
-
-        if success {
-            search_entry.set_text("__refresh__");
-            search_entry.set_text("");
-        }
     }
 
-    success
+    success && (app.entry_type != EntryType::File || app.icon_name != "folder")
 }
 
 trait WindowAnchoring {

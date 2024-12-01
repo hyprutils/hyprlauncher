@@ -216,18 +216,26 @@ fn handle_path_search(query: &str) -> Vec<SearchResult> {
     let expanded_path = shellexpand::full(query).unwrap_or(std::borrow::Cow::Borrowed(query));
     let path = std::path::Path::new(expanded_path.as_ref());
 
-    let dir = if path.is_dir() {
-        path.to_path_buf()
+    let (dir, filter) = if path.is_dir() {
+        (path.to_path_buf(), String::new())
     } else {
-        path.parent()
-            .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| PathBuf::from("/"))
+        (
+            path.parent()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| PathBuf::from("/")),
+            path.file_name()
+                .map(|f| f.to_string_lossy().to_lowercase())
+                .unwrap_or_default(),
+        )
     };
+
+    let matcher = SkimMatcherV2::default().smart_case();
 
     std::fs::read_dir(&dir)
         .ok()
         .map(|entries| {
             let mut results: Vec<SearchResult> = Vec::new();
+            let mut parent_entry = None;
 
             if let Some(parent_dir) = dir.parent() {
                 if let Some(mut app_entry) =
@@ -235,9 +243,9 @@ fn handle_path_search(query: &str) -> Vec<SearchResult> {
                 {
                     app_entry.name = String::from("..");
                     app_entry.score_boost = BONUS_SCORE_FOLDER;
-                    results.push(SearchResult {
+                    parent_entry = Some(SearchResult {
                         app: app_entry,
-                        score: BONUS_SCORE_FOLDER,
+                        score: i64::MAX,
                     });
                 }
             }
@@ -245,6 +253,7 @@ fn handle_path_search(query: &str) -> Vec<SearchResult> {
             for entry in entries.filter_map(Result::ok) {
                 let file_name = entry.file_name();
                 let file_name_str = file_name.to_string_lossy();
+                let file_name_lower = file_name_str.to_lowercase();
 
                 if !config.finder.show_hidden
                     && file_name_str.starts_with('.')
@@ -253,7 +262,23 @@ fn handle_path_search(query: &str) -> Vec<SearchResult> {
                     continue;
                 }
 
-                if let Some(app_entry) =
+                if !filter.is_empty() {
+                    if let Some(score) = matcher.fuzzy_match(&file_name_lower, &filter) {
+                        if let Some(app_entry) =
+                            launcher::create_file_entry(entry.path().to_string_lossy().into_owned())
+                        {
+                            let base_score = if app_entry.icon_name == "folder" {
+                                BONUS_SCORE_FOLDER
+                            } else {
+                                0
+                            };
+                            results.push(SearchResult {
+                                app: app_entry,
+                                score: score + base_score,
+                            });
+                        }
+                    }
+                } else if let Some(app_entry) =
                     launcher::create_file_entry(entry.path().to_string_lossy().into_owned())
                 {
                     let score = if app_entry.icon_name == "folder" {
@@ -269,6 +294,11 @@ fn handle_path_search(query: &str) -> Vec<SearchResult> {
             }
 
             results.sort_unstable_by_key(|item| (-item.score, item.app.name.clone()));
+
+            if let Some(parent) = parent_entry {
+                results.insert(0, parent);
+            }
+
             results
         })
         .unwrap_or_default()

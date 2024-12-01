@@ -23,7 +23,7 @@ pub struct AppEntry {
     pub terminal: bool,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub enum EntryType {
     Application,
     File,
