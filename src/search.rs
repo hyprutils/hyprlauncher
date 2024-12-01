@@ -18,6 +18,13 @@ pub struct SearchResult {
     pub score: i64,
 }
 
+fn get_filename_without_extension(path: &str) -> Option<String> {
+    std::path::Path::new(path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_lowercase())
+}
+
 pub async fn search_applications(
     query: &str,
     config: &Config,
@@ -66,6 +73,26 @@ pub async fn search_applications(
                         });
                         seen_names.insert(name_key);
                         continue;
+                    }
+
+                    if let Some(filename) = get_filename_without_extension(&app.path) {
+                        if filename == query {
+                            results.push(SearchResult {
+                                app: app.clone(),
+                                score: BONUS_SCORE_BINARY + calculate_bonus_score(app),
+                            });
+                            seen_names.insert(name_key);
+                            continue;
+                        }
+
+                        if let Some(score) = matcher.fuzzy_match(&filename, &query) {
+                            results.push(SearchResult {
+                                app: app.clone(),
+                                score: score + calculate_bonus_score(app),
+                            });
+                            seen_names.insert(name_key.clone());
+                            continue;
+                        }
                     }
 
                     if app.keywords.iter().any(|k| k.to_lowercase() == query) {
