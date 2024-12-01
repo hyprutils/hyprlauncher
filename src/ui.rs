@@ -71,7 +71,8 @@ impl LauncherWindow {
             .build();
 
         window.init_layer_shell();
-        window.set_layer(Layer::Top);
+        window.set_layer(Layer::Overlay);
+        window.set_namespace("hyprlauncher");
         window.set_keyboard_mode(if config.debug.disable_auto_focus {
             KeyboardMode::OnDemand
         } else {
