@@ -374,9 +374,11 @@ impl Config {
                     caret-color: @theme_text_color;
                     font-size: {}px;
                     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+                    outline: none;
                 }}
                 entry:focus {{
                     background-color: @theme_base_color;
+                    outline: none;
                 }}
                 .app-name {{
                     color: @theme_text_color;
@@ -454,9 +456,11 @@ impl Config {
                     caret-color: {};
                     font-size: {}px;
                     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+                    outline: none;
                 }}
                 entry:focus {{
                     background-color: {};
+                    outline: none;
                 }}
                 .app-name {{
                     color: {};
