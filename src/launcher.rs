@@ -41,7 +41,7 @@ static DESKTOP_PATHS: &[&str] = &[
 
 const DEFAULT_SCORE_BOOST: i64 = 2000;
 
-pub fn increment_launch_count(app: &AppEntry) -> Result<(), std::io::Error> {
+pub fn increment_launch_count(app: &AppEntry) -> Result<u32, std::io::Error> {
     let app_name = app.name.clone();
     let count = app.launch_count + 1;
 
@@ -49,7 +49,7 @@ pub fn increment_launch_count(app: &AppEntry) -> Result<(), std::io::Error> {
         save_heatmap(&app_name, count).unwrap();
     });
 
-    Ok(())
+    Ok(count)
 }
 
 #[inline]

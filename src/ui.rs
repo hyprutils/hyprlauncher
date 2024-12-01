@@ -1,6 +1,6 @@
 use crate::{
     config::{Config, WindowAnchor},
-    launcher::{self, AppEntry, EntryType},
+    launcher::{self, AppEntry, EntryType, APP_CACHE},
     log, search,
 };
 use gtk4::{
@@ -560,43 +560,56 @@ fn select_previous(list_view: &ListView) {
 }
 
 fn launch_application(app: &AppEntry, search_entry: &gtk4::SearchEntry) -> bool {
-    if let Err(e) = launcher::increment_launch_count(app) {
-        log!("Failed to increment launch count: {}", e);
+    let mut success = false;
+
+    if let Ok(new_count) = launcher::increment_launch_count(app) {
+        let app_name = app.name.clone();
+        let mut cache = APP_CACHE.blocking_write();
+        if let Some(cached_app) = cache.get_mut(&app_name) {
+            cached_app.launch_count = new_count;
+        }
+
+        match app.entry_type {
+            EntryType::Application => {
+                log!("Launching application: {}", app.name);
+                if app.terminal {
+                    let terminal =
+                        std::env::var("TERMINAL").unwrap_or_else(|_| "xterm".to_string());
+                    success = Command::new(terminal)
+                        .arg("-e")
+                        .arg("sh")
+                        .arg("-c")
+                        .arg(&app.exec)
+                        .spawn()
+                        .is_ok()
+                } else {
+                    success = Command::new("sh").arg("-c").arg(&app.exec).spawn().is_ok()
+                }
+            }
+            EntryType::File => {
+                if app.icon_name == "folder" {
+                    log!("Opening folder: {}", app.path);
+                    let path = if app.path.ends_with('/') {
+                        app.path.clone()
+                    } else {
+                        format!("{}/", app.path)
+                    };
+                    search_entry.set_text(&path);
+                    search_entry.set_position(-1);
+                } else {
+                    log!("Opening file: {}", app.path);
+                    success = Command::new("sh").arg("-c").arg(&app.exec).spawn().is_ok()
+                }
+            }
+        }
+
+        if success {
+            search_entry.set_text("__refresh__");
+            search_entry.set_text("");
+        }
     }
 
-    match app.entry_type {
-        EntryType::Application => {
-            log!("Launching application: {}", app.name);
-            if app.terminal {
-                let terminal = std::env::var("TERMINAL").unwrap_or_else(|_| "xterm".to_string());
-                Command::new(terminal)
-                    .arg("-e")
-                    .arg("sh")
-                    .arg("-c")
-                    .arg(&app.exec)
-                    .spawn()
-                    .is_ok()
-            } else {
-                Command::new("sh").arg("-c").arg(&app.exec).spawn().is_ok()
-            }
-        }
-        EntryType::File => {
-            if app.icon_name == "folder" {
-                log!("Opening folder: {}", app.path);
-                let path = if app.path.ends_with('/') {
-                    app.path.clone()
-                } else {
-                    format!("{}/", app.path)
-                };
-                search_entry.set_text(&path);
-                search_entry.set_position(-1);
-                false
-            } else {
-                log!("Opening file: {}", app.path);
-                Command::new("sh").arg("-c").arg(&app.exec).spawn().is_ok()
-            }
-        }
-    }
+    success
 }
 
 trait WindowAnchoring {
