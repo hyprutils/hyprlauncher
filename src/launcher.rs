@@ -150,6 +150,36 @@ fn parse_desktop_entry(path: &std::path::Path) -> Option<AppEntry> {
         return None;
     }
 
+    let current_desktop = std::env::var("XDG_CURRENT_DESKTOP")
+        .unwrap_or_default()
+        .to_uppercase();
+    let desktops: Vec<String> = current_desktop
+        .split(':')
+        .map(|s| s.to_uppercase())
+        .collect();
+
+    if let Some(only_show_in) = section.attr("OnlyShowIn") {
+        let allowed_desktops: Vec<String> = only_show_in
+            .split(';')
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_uppercase())
+            .collect();
+        if !desktops.iter().any(|d| allowed_desktops.contains(d)) {
+            return None;
+        }
+    }
+
+    if let Some(not_show_in) = section.attr("NotShowIn") {
+        let excluded_desktops: Vec<String> = not_show_in
+            .split(';')
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_uppercase())
+            .collect();
+        if desktops.iter().any(|d| excluded_desktops.contains(d)) {
+            return None;
+        }
+    }
+
     let name = String::from(section.attr("Name")?);
     let exec = String::from(section.attr("Exec").unwrap_or_default());
     let icon = String::from(section.attr("Icon").unwrap_or("application-x-executable"));
