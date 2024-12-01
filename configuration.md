@@ -157,6 +157,15 @@ Applications are searched in the following locations:
 
 Furthermore, applications can be indexed via XDG_DATA_DIRS environment variable.
 
+## Terminal Applications
+Terminal-based application launching requires the `TERMINAL` environment variable to be set. If not set, Hyprlauncher will fall back to using `xterm`. To ensure terminal applications launch properly, set your terminal emulator:
+
+```bash
+export TERMINAL=alacritty  # or kitty, foot, etc.
+```
+
+This can be added to your shell's profile (e.g., `.bash_profile`, `.zprofile`).
+
 ## Application Launch History
 Hyprlauncher maintains a launch history for applications in `~/.local/share/hyprlauncher/heatmap.json`. This is used to improve search result rankings based on usage frequency.
 
