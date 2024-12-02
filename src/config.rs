@@ -289,10 +289,17 @@ impl Default for SearchEngine {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct SearchPrefix {
+    pub prefix: String,
+    pub url: String,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 pub struct WebSearch {
     pub enabled: bool,
     pub engine: SearchEngine,
+    pub prefixes: Vec<SearchPrefix>,
 }
 
 impl Config {

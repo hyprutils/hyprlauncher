@@ -84,7 +84,17 @@ The configuration file controls the appearance and behavior of the launcher wind
   },
   "web_search": {
     "enabled": false,          // Enable/disable web search functionality
-    "engine": "duckduckgo"     // Use preset engine name
+    "engine": "duckduckgo",    // Use preset engine name
+    "prefixes": [              // Custom search prefixes
+      {
+        "prefix": "yt",
+        "url": "https://www.youtube.com/results?search_query="
+      },
+      {
+        "prefix": "gh",
+        "url": "https://github.com/search?q="
+      }
+    ]
   }
 }
 ```
@@ -166,16 +176,17 @@ Navigation can be customized using the `custom_navigate_keys` setting:
   {
     "web_search": {
       "enabled": false,          // Enable/disable web search functionality
-      "engine": "duckduckgo"     // Use preset engine name
-    }
-  }
-  ```
-  Or with a custom search engine URL:
-  ```json
-  {
-    "web_search": {
-      "enabled": true,
-      "engine": "https://mysearchengine.com/search?q="    // Custom search URL
+      "engine": "duckduckgo",    // Use preset engine name
+      "prefixes": [              // Custom search prefixes
+        {
+          "prefix": "yt",
+          "url": "https://www.youtube.com/results?search_query="
+        },
+        {
+          "prefix": "gh",
+          "url": "https://github.com/search?q="
+        }
+      ]
     }
   }
   ```
@@ -190,6 +201,11 @@ Navigation can be customized using the `custom_navigate_keys` setting:
   - Provide the full search URL with the query parameter placeholder
   - The URL must end with the query parameter (e.g., `?q=`, `?query=`, `?search=`)
   - The search term will be automatically URL-encoded and appended to this URL
+- Search prefixes:
+  - Use `prefix:query` format to search with a specific engine
+  - Example: `yt:how to code` searches YouTube
+  - Example: `gh:rust-lang` searches GitHub
+  - Prefixes are defined in the config file
 
 ## Hot Reloading
 The configuration file is watched for changes and will automatically reload when modified. No need to restart the application.

@@ -1,5 +1,5 @@
 use crate::{
-    config::{Config, SearchEngine},
+    config::{Config, WebSearch},
     launcher::{self, AppEntry, EntryType, APP_CACHE},
 };
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
@@ -202,7 +202,7 @@ pub async fn search_applications(
                     && web_search_config.enabled
                     && !should_exclude_web_search(&query)
                 {
-                    results.push(create_web_search_entry(&query, &web_search_config.engine));
+                    results.push(create_web_search_entry(&query, &web_search_config));
                 }
 
                 results.sort_unstable_by_key(|item| -item.score);
@@ -220,7 +220,7 @@ pub async fn search_applications(
                 .iter()
                 .any(|r| r.app.categories.contains(&String::from("Web Search")))
         {
-            results.push(create_web_search_entry(&query, &web_search_config.engine));
+            results.push(create_web_search_entry(&query, &web_search_config));
             results.sort_unstable_by_key(|item| -item.score);
             if results.len() > max_results {
                 results.truncate(max_results);
@@ -435,7 +435,36 @@ pub async fn search_dmenu(
         .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Failed to receive results"))
 }
 
-fn create_web_search_entry(query: &str, engine: &SearchEngine) -> SearchResult {
+fn create_web_search_entry(query: &str, config: &WebSearch) -> SearchResult {
+    if let Some(colon_pos) = query.find(':') {
+        let (prefix, search_term) = query.split_at(colon_pos);
+        let search_term = &search_term[1..];
+
+        if let Some(prefix_config) = config.prefixes.iter().find(|p| p.prefix == prefix) {
+            return SearchResult {
+                app: AppEntry {
+                    name: format!("Search '{}' on {}", search_term, prefix),
+                    description: String::from("Open in default web browser"),
+                    path: String::new(),
+                    exec: format!(
+                        "xdg-open \"{}{}\"",
+                        prefix_config.url,
+                        utf8_percent_encode(search_term, NON_ALPHANUMERIC)
+                    ),
+                    icon_name: String::from("web-browser"),
+                    launch_count: 0,
+                    entry_type: EntryType::Application,
+                    score_boost: 0,
+                    keywords: Vec::new(),
+                    categories: vec![String::from("Web Search")],
+                    terminal: false,
+                    actions: Vec::new(),
+                },
+                score: BONUS_SCORE_WEB_SEARCH,
+            };
+        }
+    }
+
     SearchResult {
         app: AppEntry {
             name: format!("Search '{}' on the web", query),
@@ -443,7 +472,7 @@ fn create_web_search_entry(query: &str, engine: &SearchEngine) -> SearchResult {
             path: String::new(),
             exec: format!(
                 "xdg-open \"{}{}\"",
-                engine.get_url(),
+                config.engine.get_url(),
                 utf8_percent_encode(query, NON_ALPHANUMERIC)
             ),
             icon_name: String::from("web-browser"),
