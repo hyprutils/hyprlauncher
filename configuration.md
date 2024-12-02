@@ -102,6 +102,23 @@ The `anchor` setting determines where the window appears on screen. Options are:
 - bottom_left: Window appears in the bottom left corner
 - bottom_right: Window appears in the bottom right corner
 
+### Application Actions
+Desktop entries can define additional actions that appear as separate entries when `show_actions` is enabled in the config. Actions allow quick access to specific application features, for example:
+- Firefox's private browsing mode
+- Terminal's new window/tab options
+- Custom application-specific commands
+
+To enable actions, set `show_actions` to `true` in your config:
+```json
+{
+  "window": {
+    "show_actions": true
+  }
+}
+```
+
+Actions will appear as separate entries with the format "Application Name - Action Name".
+
 ### Performance
 - `max_entries`: Limits the maximum number of entries shown in the list for better performance
 
@@ -205,7 +222,7 @@ If the configuration file is invalid or missing certain values, Hyprlauncher wil
 
 The configuration file is strict and requires valid JSON format. Invalid configurations will fall back to defaults.
 
-### Custom Styling
+## Custom Styling
 Hyprlauncher supports two methods of styling:
 
 1. Built-in Theme Configuration (Default)
@@ -310,21 +327,3 @@ All standard GTK4 CSS properties are supported. Common properties include:
 - `box-shadow`
 
 When `use_custom_css` is enabled, all theme settings from config.json are ignored in favor of your custom CSS rules.
-
-### Application Actions
-Desktop entries can define additional actions that appear as separate entries when `show_actions` is enabled in the config. Actions allow quick access to specific application features, for example:
-- Firefox's private browsing mode
-- Terminal's new window/tab options
-- Custom application-specific commands
-
-To enable actions, set `show_actions` to `true` in your config:
-
-```json
-{
-  "window": {
-    "show_actions": true
-  }
-}
-```
-
-Actions will appear as separate entries with the format "Application Name - Action Name".
