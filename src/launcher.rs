@@ -23,7 +23,6 @@ pub struct AppEntry {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum EntryType {
     Application,
-    File,
     Calculation,
 }
 
@@ -169,72 +168,6 @@ fn parse_desktop_entry(path: &std::path::Path) -> Option<AppEntry> {
         entry_type: EntryType::Application,
         score_boost: 0,
     })
-}
-
-pub fn create_file_entry(path: String) -> Option<AppEntry> {
-    let path = if path.starts_with('~') || path.starts_with('$') {
-        shellexpand::full(&path).ok()?.to_string()
-    } else {
-        path
-    };
-
-    let metadata = std::fs::metadata(&path).ok()?;
-
-    if !metadata.is_file() && !metadata.is_dir() {
-        return None;
-    }
-
-    let name = std::path::Path::new(&path)
-        .file_name()?
-        .to_str()?
-        .to_string();
-
-    let (icon_name, exec, score_boost) = if metadata.is_dir() {
-        ("folder", String::new(), DEFAULT_SCORE_BOOST)
-    } else if metadata.permissions().mode() & 0o111 != 0 {
-        ("application-x-executable", format!("\"{}\"", path), 0)
-    } else {
-        let (icon, exec) = get_mime_type_info(&path);
-        (icon, exec, 0)
-    };
-
-    Some(AppEntry {
-        name,
-        exec,
-        icon_name: icon_name.to_string(),
-        description: String::new(),
-        path,
-        launch_count: 0,
-        entry_type: EntryType::File,
-        score_boost,
-    })
-}
-
-#[inline]
-fn get_mime_type_info(path: &str) -> (&'static str, String) {
-    let output = std::process::Command::new("file")
-        .arg("--mime-type")
-        .arg(path)
-        .output()
-        .ok();
-
-    let mime_type = output
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .unwrap_or_default();
-
-    let icon = if mime_type.contains("text/") {
-        "text-x-generic"
-    } else {
-        match std::path::Path::new(path)
-            .extension()
-            .and_then(|s| s.to_str())
-        {
-            Some("pdf") => "application-pdf",
-            _ => "application-x-generic",
-        }
-    };
-
-    (icon, format!("xdg-open \"{}\"", path))
 }
 
 pub fn create_calc_entry(res: String) -> Option<AppEntry> {

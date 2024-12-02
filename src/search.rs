@@ -3,8 +3,13 @@ use crate::{
     launcher::{self, AppEntry, EntryType, APP_CACHE},
 };
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
+use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use rink_core::{one_line, simple_context};
-use std::{os::unix::fs::PermissionsExt, path::PathBuf};
+use std::{
+    collections::HashMap,
+    os::unix::fs::PermissionsExt,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use tokio::sync::oneshot;
 
 const BONUS_SCORE_LAUNCH_COUNT: i64 = 100;
@@ -25,6 +30,8 @@ pub async fn search_applications(
     let query = query.to_lowercase();
     let max_results = config.window.max_entries;
     let calculator_enabled = config.modes.calculator;
+    let web_search_config = config.web_search.clone();
+    let show_actions = config.window.show_actions;
 
     tokio::task::spawn_blocking(move || {
         let cache = APP_CACHE.blocking_read();

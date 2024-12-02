@@ -144,6 +144,8 @@ pub struct Config {
     pub theme: Theme,
     pub debug: Debug,
     pub modes: Modes,
+    pub dmenu: Dmenu,
+    pub web_search: WebSearch,
 }
 
 #[allow(non_camel_case_types)]
@@ -229,6 +231,65 @@ impl Default for NavigateKeys {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
 pub struct Modes {
     pub calculator: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
+pub struct Dmenu {
+    pub allow_invalid: bool,
+    pub case_sensitive: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum SearchEngine {
+    Preset(PresetEngine),
+    Custom(String),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum PresetEngine {
+    DuckDuckGo,
+    Google,
+    Bing,
+    Brave,
+    Ecosia,
+    Startpage,
+}
+
+impl SearchEngine {
+    pub fn get_url(&self) -> String {
+        match self {
+            SearchEngine::Preset(engine) => match engine {
+                PresetEngine::DuckDuckGo => String::from("https://duckduckgo.com/?q="),
+                PresetEngine::Google => String::from("https://www.google.com/search?q="),
+                PresetEngine::Bing => String::from("https://www.bing.com/search?q="),
+                PresetEngine::Brave => String::from("https://search.brave.com/search?q="),
+                PresetEngine::Ecosia => String::from("https://www.ecosia.org/search?q="),
+                PresetEngine::Startpage => String::from("https://www.startpage.com/do/search?q="),
+            },
+            SearchEngine::Custom(url) => url.clone(),
+        }
+    }
+}
+
+impl Default for SearchEngine {
+    fn default() -> Self {
+        Self::Preset(PresetEngine::DuckDuckGo)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct SearchPrefix {
+    pub prefix: String,
+    pub url: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+pub struct WebSearch {
+    pub enabled: bool,
+    pub engine: SearchEngine,
+    pub prefixes: Vec<SearchPrefix>,
 }
 
 impl Config {
