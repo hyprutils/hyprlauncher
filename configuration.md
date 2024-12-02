@@ -1,5 +1,8 @@
 # Hyprlauncher Configuration Guide
 
+> [!WARNING]
+> This documentation represents the latest development version from Git, not the latest release. Some features described here may not be available in the current release version.
+
 Configuration file location: `~/.config/hyprlauncher/config.json`
 
 ## Configuration file
