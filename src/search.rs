@@ -242,7 +242,7 @@ fn check_binary(query: &str) -> Option<SearchResult> {
         return None;
     }
 
-    let bin_path = format!("usr/bin/{}", parts[0]);
+    let bin_path = format!("/usr/bin/{}", parts[0]);
     std::fs::metadata(&bin_path)
         .ok()
         .filter(|metadata| metadata.permissions().mode() & 0o111 != 0)
