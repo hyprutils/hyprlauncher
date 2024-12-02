@@ -76,6 +76,10 @@ The configuration file controls the appearance and behavior of the launcher wind
   "dmenu": {
     "allow_invalid": false,      // Allow invalid entries when no matches are found
     "case_sensitive": false      // Enable case-sensitive matching
+  },
+  "web_search": {
+    "enabled": false,          // Enable/disable web search functionality
+    "engine": "duckduckgo"     // Search engine to use
   }
 }
 ```
@@ -132,6 +136,36 @@ Navigation can be customized using the `custom_navigate_keys` setting:
 - Configuration options:
   - `allow_invalid`: When enabled, allows entering text that doesn't match any entry
   - `case_sensitive`: When enabled, performs case-sensitive matching
+
+### Web Search
+- Enables web search functionality when no matching applications are found
+- Configuration options in the `web_search` section:
+  ```json
+  {
+    "web_search": {
+      "enabled": false,          // Enable/disable web search functionality
+      "engine": "duckduckgo"     // Search engine to use
+    }
+  }
+  ```
+- Available search engines:
+  - `duckduckgo` (default)
+  - `google`
+  - `bing`
+  - `brave`
+  - `ecosia`
+  - `startpage`
+  - `custom` - Specify a custom search engine URL:
+    ```json
+    {
+      "web_search": {
+        "enabled": true,
+        "engine": { "Custom": "https://your-search-engine.com/search?q=" }
+      }
+    }
+    ```
+- When enabled, shows a "Search '[query]' on the web" option if no matching applications are found
+- Opens the search query in your default web browser
 
 ## Hot Reloading
 The configuration file is watched for changes and will automatically reload when modified. No need to restart the application.

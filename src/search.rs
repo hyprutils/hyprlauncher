@@ -1,8 +1,9 @@
 use crate::{
-    config::Config,
+    config::{Config, SearchEngine},
     launcher::{self, AppEntry, EntryType, APP_CACHE},
 };
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
+use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use std::{os::unix::fs::PermissionsExt, path::PathBuf};
 use tokio::sync::oneshot;
 
@@ -12,6 +13,7 @@ const BONUS_SCORE_BINARY: i64 = 3000;
 const BONUS_SCORE_FOLDER: i64 = 2000;
 const BONUS_SCORE_KEYWORD_MATCH: i64 = 2500;
 const BONUS_SCORE_CATEGORY_MATCH: i64 = 2000;
+const BONUS_SCORE_WEB_SEARCH: i64 = -1000;
 
 pub struct SearchResult {
     pub app: AppEntry,
@@ -25,6 +27,11 @@ fn get_filename_without_extension(path: &str) -> Option<String> {
         .map(|s| s.to_lowercase())
 }
 
+fn should_exclude_web_search(query: &str) -> bool {
+    let excluded_terms = ["__config_reload__", "__refresh__"];
+    excluded_terms.iter().any(|term| query == *term)
+}
+
 pub async fn search_applications(
     query: &str,
     config: &Config,
@@ -32,13 +39,12 @@ pub async fn search_applications(
     let (tx, rx) = oneshot::channel();
     let query = query.to_lowercase();
     let max_results = config.window.max_entries;
+    let web_search_config = config.web_search.clone();
 
     tokio::task::spawn_blocking(move || {
         let cache = APP_CACHE.blocking_read();
-
-        let results = match query.chars().next() {
+        let mut results = match query.chars().next() {
             Some('~' | '$' | '/') => handle_path_search(&query),
-
             None => {
                 let mut results = Vec::with_capacity(max_results);
                 for app in cache.values() {
@@ -56,7 +62,6 @@ pub async fn search_applications(
                 results.sort_unstable_by_key(|item| -item.score);
                 results
             }
-
             Some(_) => {
                 let matcher = SkimMatcherV2::default().smart_case();
                 let mut results = Vec::with_capacity(max_results);
@@ -181,6 +186,13 @@ pub async fn search_applications(
                     }
                 }
 
+                if results.is_empty()
+                    && web_search_config.enabled
+                    && !should_exclude_web_search(&query)
+                {
+                    results.push(create_web_search_entry(&query, &web_search_config.engine));
+                }
+
                 results.sort_unstable_by_key(|item| -item.score);
                 if results.len() > max_results {
                     results.truncate(max_results);
@@ -188,6 +200,20 @@ pub async fn search_applications(
                 results
             }
         };
+
+        if web_search_config.enabled
+            && !query.is_empty()
+            && !should_exclude_web_search(&query)
+            && !results
+                .iter()
+                .any(|r| r.app.categories.contains(&String::from("Web Search")))
+        {
+            results.push(create_web_search_entry(&query, &web_search_config.engine));
+            results.sort_unstable_by_key(|item| -item.score);
+            if results.len() > max_results {
+                results.truncate(max_results);
+            }
+        }
 
         tx.send(results)
             .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Failed to send results"))
@@ -379,4 +405,28 @@ pub async fn search_dmenu(
 
     rx.await
         .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Failed to receive results"))
+}
+
+fn create_web_search_entry(query: &str, engine: &SearchEngine) -> SearchResult {
+    SearchResult {
+        app: AppEntry {
+            name: format!("Search '{}' on the web", query),
+            description: String::from("Open in default web browser"),
+            path: String::new(),
+            exec: format!(
+                "xdg-open \"{}{}\"",
+                engine.get_url(),
+                utf8_percent_encode(query, NON_ALPHANUMERIC)
+            ),
+            icon_name: String::from("web-browser"),
+            launch_count: 0,
+            entry_type: EntryType::Application,
+            score_boost: 0,
+            keywords: Vec::new(),
+            categories: vec![String::from("Web Search")],
+            terminal: false,
+            actions: Vec::new(),
+        },
+        score: BONUS_SCORE_WEB_SEARCH,
+    }
 }
