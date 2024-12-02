@@ -149,10 +149,17 @@ pub async fn search_applications(
                             if let Some(icon) = &action.icon_name {
                                 action_app.icon_name = icon.clone();
                             }
-                            results.push(SearchResult {
-                                app: action_app,
-                                score: calculate_bonus_score(app) - 100,
-                            });
+
+                            let action_name = action.name.to_lowercase();
+                            if query.is_empty()
+                                || action_name.contains(&query_lower)
+                                || matcher.fuzzy_match(&action_name, &query).is_some()
+                            {
+                                results.push(SearchResult {
+                                    app: action_app,
+                                    score: calculate_bonus_score(app) - 100,
+                                });
+                            }
                         }
                     }
 
