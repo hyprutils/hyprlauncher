@@ -142,6 +142,29 @@ Navigation can be customized using the `custom_navigate_keys` setting:
 - Special path searching with `~`, `$`, or `/` prefixes
 - Search results are ranked by launch frequency
 
+### Context-Aware Search
+- Applications are ranked based on usage patterns and launch frequency
+- Launch history is stored in `~/.local/share/hyprlauncher/heatmap.json`
+- Ranking factors include:
+  - Launch count: More frequently launched applications rank higher
+  - Last used: Recently used applications get a ranking boost
+  - Icon match: Applications with matching icon names receive a bonus
+  - Binary match: Direct matches with binary names get priority
+  - Keyword match: Applications with matching keywords receive a boost
+  - Category match: Applications in relevant categories rank higher
+  - Open windows: Currently running applications receive a slight penalty to promote variety
+
+The scoring system automatically adapts to your usage patterns, making frequently used applications easier to access over time. This "learning" behavior helps optimize the launcher for your specific workflow.
+
+Example scoring bonuses (internal values):
+- Icon name match: +1000
+- Binary name match: +3000
+- Keyword match: +2500
+- Category match: +2000
+- Open window penalty: -500
+
+The heatmap data is automatically maintained and requires no manual configuration. The ranking system will begin adapting to your usage patterns as soon as you start launching applications.
+
 ### Visual Customization
 - Border customization with `border_width` - Window section, and `border` - Theme section
 - Corner radius customization for window, search bar, and list items
@@ -231,9 +254,6 @@ export TERMINAL=alacritty  # or kitty, foot, etc.
 ```
 
 This can be added to your shell's profile (e.g., `.bash_profile`, `.zprofile`).
-
-## Application Launch History
-Hyprlauncher maintains a launch history for applications in `~/.local/share/hyprlauncher/heatmap.json`. This is used to improve search result rankings based on usage frequency.
 
 ## Config Merging
 If the configuration file is invalid or missing certain values, Hyprlauncher will:
