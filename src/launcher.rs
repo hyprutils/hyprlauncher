@@ -2,7 +2,12 @@ use crate::log;
 use once_cell::sync::Lazy;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fs, os::unix::fs::PermissionsExt, path::PathBuf};
+use std::{
+    collections::HashMap,
+    fs,
+    path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use tokio::sync::RwLock;
 
 pub static APP_CACHE: Lazy<RwLock<HashMap<String, AppEntry>>> =
@@ -23,6 +28,7 @@ pub struct AppEntry {
     pub exec: String,
     pub icon_name: String,
     pub launch_count: u32,
+    pub last_used: Option<u64>,
     pub entry_type: EntryType,
     pub score_boost: i64,
     pub keywords: Vec<String>,
@@ -34,7 +40,6 @@ pub struct AppEntry {
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub enum EntryType {
     Application,
-    File,
 }
 
 static HEATMAP_PATH: &str = "~/.local/share/hyprlauncher/heatmap.json";
@@ -47,13 +52,26 @@ static DESKTOP_PATHS: &[&str] = &[
     "~/.local/share/flatpak/exports/share/applications",
 ];
 
-const DEFAULT_SCORE_BOOST: i64 = 2000;
+#[derive(Serialize, Deserialize)]
+pub struct HeatmapEntry {
+    pub count: u32,
+    pub last_used: u64,
+}
 
 pub fn increment_launch_count(app: &AppEntry) -> Result<u32, std::io::Error> {
     let app_name = app.name.clone();
     let count = app.launch_count + 1;
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
 
     std::thread::spawn(move || {
+        let mut cache = APP_CACHE.blocking_write();
+        if let Some(cached_app) = cache.get_mut(&app_name) {
+            cached_app.launch_count = count;
+            cached_app.last_used = Some(now);
+        }
         save_heatmap(&app_name, count).unwrap();
     });
 
@@ -68,8 +86,19 @@ fn save_heatmap(name: &str, count: u32) -> Result<(), std::io::Error> {
         let _ = std::fs::create_dir_all(dir);
     }
 
-    let mut heatmap = load_heatmap()?;
-    heatmap.insert(name.to_string(), count);
+    let mut heatmap: HashMap<String, HeatmapEntry> = load_heatmap()?;
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    heatmap.insert(
+        name.to_string(),
+        HeatmapEntry {
+            count,
+            last_used: now,
+        },
+    );
 
     if let Ok(contents) = serde_json::to_string(&heatmap) {
         let _ = fs::write(path, contents);
@@ -78,8 +107,7 @@ fn save_heatmap(name: &str, count: u32) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-#[inline]
-fn load_heatmap() -> Result<HashMap<String, u32>, std::io::Error> {
+pub fn load_heatmap() -> Result<HashMap<String, HeatmapEntry>, std::io::Error> {
     let path = shellexpand::tilde(HEATMAP_PATH).to_string();
     Ok(fs::read_to_string(path)
         .ok()
@@ -109,8 +137,7 @@ pub fn get_desktop_paths() -> Vec<PathBuf> {
 
 pub async fn load_applications() -> Result<(), std::io::Error> {
     log!("Starting application loading process");
-    let heatmap_future = tokio::task::spawn_blocking(load_heatmap);
-
+    let heatmap = load_heatmap()?;
     let desktop_paths = get_desktop_paths();
     log!("Scanning desktop entry paths: {:?}", desktop_paths);
     let mut apps = HashMap::with_capacity(2000);
@@ -135,10 +162,10 @@ pub async fn load_applications() -> Result<(), std::io::Error> {
         })
         .collect();
 
-    let heatmap = heatmap_future.await?;
     for mut entry in entries {
-        if let Some(count) = heatmap.as_ref().unwrap().get(&entry.name) {
-            entry.launch_count = *count;
+        if let Some(heat_entry) = heatmap.get(&entry.name) {
+            entry.launch_count = heat_entry.count;
+            entry.last_used = Some(heat_entry.last_used);
         }
         apps.insert(entry.name.clone(), entry);
     }
@@ -260,6 +287,7 @@ fn parse_desktop_entry(path: &std::path::Path) -> Option<AppEntry> {
         description: desc,
         path: path.to_string_lossy().into_owned(),
         launch_count: 0,
+        last_used: None,
         entry_type: EntryType::Application,
         score_boost: 0,
         keywords,
@@ -267,74 +295,4 @@ fn parse_desktop_entry(path: &std::path::Path) -> Option<AppEntry> {
         terminal,
         actions,
     })
-}
-
-pub fn create_file_entry(path: String) -> Option<AppEntry> {
-    let path = if path.starts_with('~') || path.starts_with('$') {
-        shellexpand::full(&path).ok()?.to_string()
-    } else {
-        path
-    };
-
-    let metadata = std::fs::metadata(&path).ok()?;
-
-    if !metadata.is_file() && !metadata.is_dir() {
-        return None;
-    }
-
-    let name = std::path::Path::new(&path)
-        .file_name()?
-        .to_str()?
-        .to_string();
-
-    let (icon_name, exec, score_boost) = if metadata.is_dir() {
-        ("folder", String::new(), DEFAULT_SCORE_BOOST)
-    } else if metadata.permissions().mode() & 0o111 != 0 {
-        ("application-x-executable", format!("\"{}\"", path), 0)
-    } else {
-        let (icon, exec) = get_mime_type_info(&path);
-        (icon, exec, 0)
-    };
-
-    Some(AppEntry {
-        name,
-        exec,
-        icon_name: icon_name.to_string(),
-        description: String::new(),
-        path,
-        launch_count: 0,
-        entry_type: EntryType::File,
-        score_boost,
-        keywords: Vec::new(),
-        categories: Vec::new(),
-        terminal: false,
-        actions: Vec::new(),
-    })
-}
-
-#[inline]
-fn get_mime_type_info(path: &str) -> (&'static str, String) {
-    let output = std::process::Command::new("file")
-        .arg("--mime-type")
-        .arg(path)
-        .output()
-        .ok();
-
-    let mime_type = output
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .unwrap_or_default();
-
-    let icon = if mime_type.contains("text/") {
-        "text-x-generic"
-    } else {
-        match std::path::Path::new(path)
-            .extension()
-            .and_then(|s| s.to_str())
-        {
-            Some("pdf") => "application-pdf",
-            _ => "application-x-generic",
-        }
-    };
-
-    (icon, format!("xdg-open \"{}\"", path))
 }

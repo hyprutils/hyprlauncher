@@ -4,27 +4,31 @@ use crate::{
 };
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
-use std::{os::unix::fs::PermissionsExt, path::PathBuf};
+use std::{
+    collections::HashMap,
+    os::unix::fs::PermissionsExt,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use tokio::sync::oneshot;
+use x11rb::{
+    connection::Connection,
+    protocol::xproto::{self, ConnectionExt},
+};
 
-const BONUS_SCORE_LAUNCH_COUNT: i64 = 100;
 const BONUS_SCORE_ICON_NAME: i64 = 1000;
 const BONUS_SCORE_BINARY: i64 = 3000;
-const BONUS_SCORE_FOLDER: i64 = 2000;
 const BONUS_SCORE_KEYWORD_MATCH: i64 = 2500;
 const BONUS_SCORE_CATEGORY_MATCH: i64 = 2000;
 const BONUS_SCORE_WEB_SEARCH: i64 = -1000;
+const OPEN_WINDOW_PENALTY: i64 = -500;
 
 pub struct SearchResult {
     pub app: AppEntry,
     pub score: i64,
 }
-
-fn get_filename_without_extension(path: &str) -> Option<String> {
-    std::path::Path::new(path)
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .map(|s| s.to_lowercase())
+pub struct HistoryEntry {
+    last_used: u64,
+    use_count: i64,
 }
 
 fn should_exclude_web_search(query: &str) -> bool {
@@ -32,6 +36,33 @@ fn should_exclude_web_search(query: &str) -> bool {
     excluded_terms
         .iter()
         .any(|term| query.eq_ignore_ascii_case(term))
+}
+
+fn get_active_window_classes() -> Vec<String> {
+    let (conn, screen_num) = x11rb::connect(None).unwrap();
+    let screen = &conn.setup().roots[screen_num];
+    let mut classes = Vec::new();
+
+    if let Ok(tree) = conn.query_tree(screen.root).unwrap().reply() {
+        for window in tree.children {
+            if let Ok(cookie) = conn.get_property(
+                false,
+                window,
+                xproto::AtomEnum::WM_CLASS,
+                xproto::AtomEnum::STRING,
+                0,
+                1024,
+            ) {
+                if let Ok(props) = cookie.reply() {
+                    if let Ok(class) = String::from_utf8(props.value) {
+                        classes.push(class.to_lowercase());
+                    }
+                }
+            }
+        }
+    }
+
+    classes
 }
 
 pub async fn search_applications(
@@ -48,7 +79,6 @@ pub async fn search_applications(
     tokio::task::spawn_blocking(move || {
         let cache = APP_CACHE.blocking_read();
         let mut results = match query.chars().next() {
-            Some('~' | '$' | '/') => handle_path_search(&query),
             None => {
                 let mut results = Vec::with_capacity(max_results);
                 for app in cache.values() {
@@ -83,28 +113,6 @@ pub async fn search_applications(
                         });
                         seen_names.insert(name_key.clone());
                         added = true;
-                    }
-
-                    if let Some(filename) = get_filename_without_extension(&app.path) {
-                        if filename == query {
-                            if !added {
-                                results.push(SearchResult {
-                                    app: app.clone(),
-                                    score: BONUS_SCORE_BINARY + calculate_bonus_score(app),
-                                });
-                                seen_names.insert(name_key.clone());
-                                added = true;
-                            }
-                        } else if let Some(score) = matcher.fuzzy_match(&filename, &query) {
-                            if !added {
-                                results.push(SearchResult {
-                                    app: app.clone(),
-                                    score: score + calculate_bonus_score(app),
-                                });
-                                seen_names.insert(name_key.clone());
-                                added = true;
-                            }
-                        }
                     }
 
                     if app.keywords.iter().any(|k| k.eq_ignore_ascii_case(&query)) && !added {
@@ -234,15 +242,37 @@ pub async fn search_applications(
     rx.await
         .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Failed to receive results"))
 }
-
 #[inline(always)]
 fn calculate_bonus_score(app: &AppEntry) -> i64 {
-    (app.launch_count as i64 * BONUS_SCORE_LAUNCH_COUNT)
-        + if app.icon_name == "application-x-executable" {
-            0
-        } else {
-            BONUS_SCORE_ICON_NAME
-        }
+    let mut score = 0;
+    let history = load_history();
+
+    if let Some(entry) = history.get(&app.name) {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let seconds_since_used = (now - entry.last_used) as i64;
+        score = 10000 - (seconds_since_used / 10);
+
+        score += (entry.use_count * 20).min(200);
+    } else {
+        score += (app.launch_count as i64 * 20).min(200);
+    }
+
+    if app.icon_name != "application-x-executable" {
+        score += BONUS_SCORE_ICON_NAME;
+    }
+
+    let active_windows = get_active_window_classes();
+    if active_windows.iter().any(|class| {
+        app.name.to_lowercase().contains(class) || app.exec.to_lowercase().contains(class)
+    }) {
+        score += OPEN_WINDOW_PENALTY;
+    }
+
+    score
 }
 
 #[inline(always)]
@@ -253,6 +283,11 @@ fn check_binary(query: &str) -> Option<SearchResult> {
     }
 
     let bin_path = format!("/usr/bin/{}", parts[0]);
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
     std::fs::metadata(&bin_path)
         .ok()
         .filter(|metadata| metadata.permissions().mode() & 0o111 != 0)
@@ -268,7 +303,8 @@ fn check_binary(query: &str) -> Option<SearchResult> {
                 },
                 icon_name: String::from("application-x-executable"),
                 launch_count: 0,
-                entry_type: EntryType::File,
+                last_used: Some(now),
+                entry_type: EntryType::Application,
                 score_boost: BONUS_SCORE_BINARY,
                 keywords: Vec::new(),
                 categories: Vec::new(),
@@ -277,116 +313,6 @@ fn check_binary(query: &str) -> Option<SearchResult> {
             },
             score: BONUS_SCORE_BINARY,
         })
-}
-
-#[inline(always)]
-fn handle_path_search(query: &str) -> Vec<SearchResult> {
-    let config = Config::load();
-    let expanded_path = shellexpand::full(query).unwrap_or(std::borrow::Cow::Borrowed(query));
-    let path = std::path::Path::new(expanded_path.as_ref());
-
-    let (dir, filter) = if path.is_dir() {
-        (path.to_path_buf(), String::new())
-    } else {
-        (
-            path.parent()
-                .map(|p| p.to_path_buf())
-                .unwrap_or_else(|| PathBuf::from("/")),
-            path.file_name()
-                .map(|f| f.to_string_lossy().to_string())
-                .unwrap_or_default(),
-        )
-    };
-
-    let matcher = SkimMatcherV2::default();
-
-    std::fs::read_dir(&dir)
-        .ok()
-        .map(|entries| {
-            let mut results: Vec<SearchResult> = Vec::new();
-            let mut parent_entry = None;
-
-            if let Some(parent_dir) = dir.parent() {
-                if let Some(mut app_entry) =
-                    launcher::create_file_entry(parent_dir.to_string_lossy().into_owned())
-                {
-                    app_entry.name = String::from("..");
-                    app_entry.score_boost = BONUS_SCORE_FOLDER;
-                    parent_entry = Some(SearchResult {
-                        app: app_entry,
-                        score: i64::MAX,
-                    });
-                }
-            }
-
-            for entry in entries.filter_map(Result::ok) {
-                let file_name = entry.file_name();
-                let file_name_str = file_name.to_string_lossy();
-                let file_name_lower = file_name_str.to_lowercase();
-
-                if !config.finder.show_hidden
-                    && file_name_str.starts_with('.')
-                    && file_name_str != ".."
-                {
-                    continue;
-                }
-
-                if !filter.is_empty() {
-                    let filter_lower = filter.to_lowercase();
-                    if file_name_lower.contains(&filter_lower) {
-                        if let Some(app_entry) =
-                            launcher::create_file_entry(entry.path().to_string_lossy().into_owned())
-                        {
-                            let base_score = if app_entry.icon_name == "folder" {
-                                BONUS_SCORE_FOLDER
-                            } else {
-                                0
-                            };
-                            results.push(SearchResult {
-                                app: app_entry,
-                                score: BONUS_SCORE_BINARY + base_score,
-                            });
-                        }
-                    } else if let Some(score) = matcher.fuzzy_match(&file_name_lower, &filter_lower)
-                    {
-                        if let Some(app_entry) =
-                            launcher::create_file_entry(entry.path().to_string_lossy().into_owned())
-                        {
-                            let base_score = if app_entry.icon_name == "folder" {
-                                BONUS_SCORE_FOLDER
-                            } else {
-                                0
-                            };
-                            results.push(SearchResult {
-                                app: app_entry,
-                                score: score + base_score,
-                            });
-                        }
-                    }
-                } else if let Some(app_entry) =
-                    launcher::create_file_entry(entry.path().to_string_lossy().into_owned())
-                {
-                    let score = if app_entry.icon_name == "folder" {
-                        BONUS_SCORE_FOLDER
-                    } else {
-                        0
-                    };
-                    results.push(SearchResult {
-                        app: app_entry,
-                        score,
-                    });
-                }
-            }
-
-            results.sort_unstable_by_key(|item| (-item.score, item.app.name.to_lowercase()));
-
-            if let Some(parent) = parent_entry {
-                results.insert(0, parent);
-            }
-
-            results
-        })
-        .unwrap_or_default()
 }
 
 pub async fn search_dmenu(
@@ -436,6 +362,11 @@ pub async fn search_dmenu(
 }
 
 fn create_web_search_entry(query: &str, config: &WebSearch) -> SearchResult {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
     if let Some(colon_pos) = query.find(':') {
         let (prefix, search_term) = query.split_at(colon_pos);
         let search_term = &search_term[1..];
@@ -453,6 +384,7 @@ fn create_web_search_entry(query: &str, config: &WebSearch) -> SearchResult {
                     ),
                     icon_name: String::from("web-browser"),
                     launch_count: 0,
+                    last_used: Some(now),
                     entry_type: EntryType::Application,
                     score_boost: 0,
                     keywords: Vec::new(),
@@ -477,6 +409,7 @@ fn create_web_search_entry(query: &str, config: &WebSearch) -> SearchResult {
             ),
             icon_name: String::from("web-browser"),
             launch_count: 0,
+            last_used: Some(now),
             entry_type: EntryType::Application,
             score_boost: 0,
             keywords: Vec::new(),
@@ -486,4 +419,22 @@ fn create_web_search_entry(query: &str, config: &WebSearch) -> SearchResult {
         },
         score: BONUS_SCORE_WEB_SEARCH,
     }
+}
+
+fn load_history() -> HashMap<String, HistoryEntry> {
+    let mut history = HashMap::new();
+
+    if let Ok(heatmap) = launcher::load_heatmap() {
+        for (name, entry) in heatmap {
+            history.insert(
+                name,
+                HistoryEntry {
+                    last_used: entry.last_used,
+                    use_count: entry.count.into(),
+                },
+            );
+        }
+    }
+
+    history
 }

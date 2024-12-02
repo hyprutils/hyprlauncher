@@ -15,7 +15,12 @@ use gtk4::{
     STYLE_PROVIDER_PRIORITY_USER,
 };
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
-use std::{cell::RefCell, process::Command, rc::Rc};
+use std::{
+    cell::RefCell,
+    process::Command,
+    rc::Rc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use tokio::runtime::Handle;
 
 pub struct LauncherWindow {
@@ -348,7 +353,13 @@ impl LauncherWindow {
                 exec: entry,
                 icon_name: String::new(),
                 launch_count: 0,
-                entry_type: EntryType::File,
+                last_used: Some(
+                    SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs(),
+                ),
+                entry_type: EntryType::Application,
                 score_boost: 0,
                 keywords: Vec::new(),
                 categories: Vec::new(),
@@ -678,7 +689,13 @@ impl LauncherWindow {
                             exec: name,
                             icon_name: String::new(),
                             launch_count: 0,
-                            entry_type: EntryType::File,
+                            last_used: Some(
+                                SystemTime::now()
+                                    .duration_since(UNIX_EPOCH)
+                                    .unwrap()
+                                    .as_secs(),
+                            ),
+                            entry_type: EntryType::Application,
                             score_boost: 0,
                             keywords: Vec::new(),
                             categories: Vec::new(),
@@ -837,52 +854,26 @@ fn launch_application(app: &AppEntry, search_entry: &gtk4::SearchEntry) -> bool 
             cached_app.launch_count = new_count;
         }
 
-        match app.entry_type {
-            EntryType::Application => {
-                log!("Launching application: {}", app.name);
-                if app.terminal {
-                    let terminal =
-                        std::env::var("TERMINAL").unwrap_or_else(|_| "xterm".to_string());
-                    success = Command::new(terminal)
-                        .arg("-e")
-                        .arg("sh")
-                        .arg("-c")
-                        .arg(&app.exec)
-                        .spawn()
-                        .is_ok()
-                } else {
-                    success = Command::new("sh").arg("-c").arg(&app.exec).spawn().is_ok()
-                }
-                if success {
-                    search_entry.set_text("__refresh__");
-                    search_entry.set_text("");
-                }
-            }
-            EntryType::File => {
-                if app.icon_name == "folder" {
-                    log!("Opening folder: {}", app.path);
-                    let path = if app.path.ends_with('/') {
-                        app.path.clone()
-                    } else {
-                        format!("{}/", app.path)
-                    };
-                    search_entry.set_text(&path);
-                    search_entry.set_position(-1);
-                    search_entry.grab_focus();
-                    success = true;
-                } else {
-                    log!("Opening file: {}", app.path);
-                    success = Command::new("sh").arg("-c").arg(&app.exec).spawn().is_ok();
-                    if success {
-                        search_entry.set_text("__refresh__");
-                        search_entry.set_text("");
-                    }
-                }
-            }
+        log!("Launching application: {}", app.name);
+        if app.terminal {
+            let terminal = std::env::var("TERMINAL").unwrap_or_else(|_| "xterm".to_string());
+            success = Command::new(terminal)
+                .arg("-e")
+                .arg("sh")
+                .arg("-c")
+                .arg(&app.exec)
+                .spawn()
+                .is_ok()
+        } else {
+            success = Command::new("sh").arg("-c").arg(&app.exec).spawn().is_ok()
+        }
+        if success {
+            search_entry.set_text("__refresh__");
+            search_entry.set_text("");
         }
     }
 
-    success && (app.entry_type != EntryType::File || app.icon_name != "folder")
+    success
 }
 
 trait WindowAnchoring {
