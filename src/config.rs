@@ -151,6 +151,7 @@ pub struct Config {
     pub debug: Debug,
     pub finder: Finder,
     pub dmenu: Dmenu,
+    pub web_search: WebSearch,
 }
 
 #[allow(non_camel_case_types)]
@@ -242,6 +243,47 @@ pub struct Finder {
 pub struct Dmenu {
     pub allow_invalid: bool,
     pub case_sensitive: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum SearchEngine {
+    #[serde(rename = "duckduckgo")]
+    DuckDuckGo,
+    #[serde(rename = "google")]
+    Google,
+    #[serde(rename = "bing")]
+    Bing,
+    #[serde(rename = "brave")]
+    Brave,
+    #[serde(rename = "ecosia")]
+    Ecosia,
+    #[serde(rename = "startpage")]
+    Startpage,
+}
+
+impl SearchEngine {
+    pub fn get_url(&self) -> String {
+        match self {
+            SearchEngine::DuckDuckGo => String::from("https://duckduckgo.com/?q="),
+            SearchEngine::Google => String::from("https://www.google.com/search?q="),
+            SearchEngine::Bing => String::from("https://www.bing.com/search?q="),
+            SearchEngine::Brave => String::from("https://search.brave.com/search?q="),
+            SearchEngine::Ecosia => String::from("https://www.ecosia.org/search?q="),
+            SearchEngine::Startpage => String::from("https://www.startpage.com/do/search?q="),
+        }
+    }
+}
+
+impl Default for SearchEngine {
+    fn default() -> Self {
+        Self::DuckDuckGo
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+pub struct WebSearch {
+    pub enabled: bool,
+    pub engine: SearchEngine,
 }
 
 impl Config {
