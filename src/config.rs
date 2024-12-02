@@ -185,6 +185,7 @@ pub struct Window {
     pub show_border: bool,
     pub border_width: i32,
     pub use_gtk_colors: bool,
+    pub use_custom_css: bool,
     pub max_entries: usize,
 }
 
@@ -206,6 +207,7 @@ impl Default for Window {
             show_border: true,
             border_width: 2,
             use_gtk_colors: false,
+            use_custom_css: false,
             max_entries: 50,
         }
     }
@@ -368,6 +370,17 @@ impl Config {
     }
 
     pub fn get_css(&self) -> String {
+        if self.window.use_custom_css {
+            let custom_css_path = Self::config_dir().join("style.css");
+            if let Ok(css) = fs::read_to_string(&custom_css_path) {
+                return css;
+            }
+            log!(
+                "Custom CSS file not found at {:?}, falling back to default styling",
+                custom_css_path
+            );
+        }
+
         let theme = &self.theme;
         let window = &self.window;
 
