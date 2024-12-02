@@ -43,6 +43,7 @@ pub async fn search_applications(
     let query_lower = query.to_lowercase();
     let max_results = config.window.max_entries;
     let web_search_config = config.web_search.clone();
+    let show_actions = config.window.show_actions;
 
     tokio::task::spawn_blocking(move || {
         let cache = APP_CACHE.blocking_read();
@@ -73,14 +74,74 @@ pub async fn search_applications(
                 for app in cache.values() {
                     let name_lower = app.name.to_lowercase();
                     let name_key = name_lower.clone();
+                    let mut added = false;
 
                     if name_lower.eq_ignore_ascii_case(&query_lower) {
                         results.push(SearchResult {
                             app: app.clone(),
                             score: BONUS_SCORE_BINARY + calculate_bonus_score(app),
                         });
-                        seen_names.insert(name_key);
+                        seen_names.insert(name_key.clone());
+                        added = true;
+                    }
 
+                    if let Some(filename) = get_filename_without_extension(&app.path) {
+                        if filename == query {
+                            if !added {
+                                results.push(SearchResult {
+                                    app: app.clone(),
+                                    score: BONUS_SCORE_BINARY + calculate_bonus_score(app),
+                                });
+                                seen_names.insert(name_key.clone());
+                                added = true;
+                            }
+                        } else if let Some(score) = matcher.fuzzy_match(&filename, &query) {
+                            if !added {
+                                results.push(SearchResult {
+                                    app: app.clone(),
+                                    score: score + calculate_bonus_score(app),
+                                });
+                                seen_names.insert(name_key.clone());
+                                added = true;
+                            }
+                        }
+                    }
+
+                    if app.keywords.iter().any(|k| k.eq_ignore_ascii_case(&query)) && !added {
+                        results.push(SearchResult {
+                            app: app.clone(),
+                            score: BONUS_SCORE_KEYWORD_MATCH + calculate_bonus_score(app),
+                        });
+                        seen_names.insert(name_key.clone());
+                        added = true;
+                    }
+
+                    if app
+                        .categories
+                        .iter()
+                        .any(|c| c.eq_ignore_ascii_case(&query))
+                        && !added
+                    {
+                        results.push(SearchResult {
+                            app: app.clone(),
+                            score: BONUS_SCORE_CATEGORY_MATCH + calculate_bonus_score(app),
+                        });
+                        seen_names.insert(name_key.clone());
+                        added = true;
+                    }
+
+                    if let Some(score) = matcher.fuzzy_match(&name_lower, &query) {
+                        if !added {
+                            results.push(SearchResult {
+                                app: app.clone(),
+                                score: score + calculate_bonus_score(app),
+                            });
+                            seen_names.insert(name_key.clone());
+                            added = true;
+                        }
+                    }
+
+                    if show_actions {
                         for action in &app.actions {
                             let mut action_app = app.clone();
                             action_app.name = format!("{} - {}", app.name, action.name);
@@ -90,99 +151,36 @@ pub async fn search_applications(
                             }
                             results.push(SearchResult {
                                 app: action_app,
-                                score: BONUS_SCORE_BINARY + calculate_bonus_score(app) - 100,
+                                score: calculate_bonus_score(app) - 100,
                             });
                         }
-                        continue;
                     }
 
-                    if let Some(filename) = get_filename_without_extension(&app.path) {
-                        if filename == query {
-                            results.push(SearchResult {
-                                app: app.clone(),
-                                score: BONUS_SCORE_BINARY + calculate_bonus_score(app),
-                            });
-                            seen_names.insert(name_key.clone());
-                            continue;
-                        }
-
-                        if let Some(score) = matcher.fuzzy_match(&filename, &query) {
-                            results.push(SearchResult {
-                                app: app.clone(),
-                                score: score + calculate_bonus_score(app),
-                            });
-                            seen_names.insert(name_key.clone());
-                            continue;
-                        }
-                    }
-
-                    if app.keywords.iter().any(|k| k.eq_ignore_ascii_case(&query)) {
-                        results.push(SearchResult {
-                            app: app.clone(),
-                            score: BONUS_SCORE_KEYWORD_MATCH + calculate_bonus_score(app),
-                        });
-                        seen_names.insert(name_key.clone());
-                        continue;
-                    }
-
-                    if app
-                        .categories
-                        .iter()
-                        .any(|c| c.eq_ignore_ascii_case(&query))
-                    {
-                        results.push(SearchResult {
-                            app: app.clone(),
-                            score: BONUS_SCORE_CATEGORY_MATCH + calculate_bonus_score(app),
-                        });
-                        seen_names.insert(name_key.clone());
-                        continue;
-                    }
-
-                    if let Some(score) = matcher.fuzzy_match(&name_lower, &query) {
-                        results.push(SearchResult {
-                            app: app.clone(),
-                            score: score + calculate_bonus_score(app),
-                        });
-
-                        for action in &app.actions {
-                            let action_name =
-                                format!("{} - {}", app.name, action.name).to_lowercase();
-                            if let Some(action_score) = matcher.fuzzy_match(&action_name, &query) {
-                                let mut action_app = app.clone();
-                                action_app.name = format!("{} - {}", app.name, action.name);
-                                action_app.exec = action.exec.clone();
-                                if let Some(icon) = &action.icon_name {
-                                    action_app.icon_name = icon.clone();
-                                }
+                    if !added {
+                        for keyword in &app.keywords {
+                            if let Some(score) =
+                                matcher.fuzzy_match(&keyword.to_lowercase(), &query)
+                            {
                                 results.push(SearchResult {
-                                    app: action_app,
-                                    score: action_score + calculate_bonus_score(app) - 100,
+                                    app: app.clone(),
+                                    score: score + calculate_bonus_score(app),
                                 });
+                                seen_names.insert(name_key.clone());
+                                break;
                             }
                         }
-                        seen_names.insert(name_key.clone());
-                        continue;
-                    }
 
-                    for keyword in &app.keywords {
-                        if let Some(score) = matcher.fuzzy_match(&keyword.to_lowercase(), &query) {
-                            results.push(SearchResult {
-                                app: app.clone(),
-                                score: score + calculate_bonus_score(app),
-                            });
-                            seen_names.insert(name_key.clone());
-                            break;
-                        }
-                    }
-
-                    for category in &app.categories {
-                        if let Some(score) = matcher.fuzzy_match(&category.to_lowercase(), &query) {
-                            results.push(SearchResult {
-                                app: app.clone(),
-                                score: score + calculate_bonus_score(app),
-                            });
-                            seen_names.insert(name_key.clone());
-                            break;
+                        for category in &app.categories {
+                            if let Some(score) =
+                                matcher.fuzzy_match(&category.to_lowercase(), &query)
+                            {
+                                results.push(SearchResult {
+                                    app: app.clone(),
+                                    score: score + calculate_bonus_score(app),
+                                });
+                                seen_names.insert(name_key.clone());
+                                break;
+                            }
                         }
                     }
                 }

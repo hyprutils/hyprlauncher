@@ -22,6 +22,7 @@ The configuration file controls the appearance and behavior of the launcher wind
     "show_paths": false,         // Show application paths in the list
     "show_icons": true,          // Show application icons in the list
     "show_search": true,         // Show the search bar
+    "show_actions": false,       // Show additional application actions in the list
     "custom_navigate_keys": {    // Customize navigation key bindings
       "up": "k",                 // Key to move selection up
       "down": "j",               // Key to move selection down
@@ -310,3 +311,20 @@ All standard GTK4 CSS properties are supported. Common properties include:
 
 When `use_custom_css` is enabled, all theme settings from config.json are ignored in favor of your custom CSS rules.
 
+### Application Actions
+Desktop entries can define additional actions that appear as separate entries when `show_actions` is enabled in the config. Actions allow quick access to specific application features, for example:
+- Firefox's private browsing mode
+- Terminal's new window/tab options
+- Custom application-specific commands
+
+To enable actions, set `show_actions` to `true` in your config:
+
+```json
+{
+  "window": {
+    "show_actions": true
+  }
+}
+```
+
+Actions will appear as separate entries with the format "Application Name - Action Name".
