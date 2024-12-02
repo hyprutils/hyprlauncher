@@ -29,7 +29,9 @@ fn get_filename_without_extension(path: &str) -> Option<String> {
 
 fn should_exclude_web_search(query: &str) -> bool {
     let excluded_terms = ["__config_reload__", "__refresh__"];
-    excluded_terms.iter().any(|term| query == *term)
+    excluded_terms
+        .iter()
+        .any(|term| query.eq_ignore_ascii_case(term))
 }
 
 pub async fn search_applications(
@@ -37,7 +39,8 @@ pub async fn search_applications(
     config: &Config,
 ) -> Result<Vec<SearchResult>, std::io::Error> {
     let (tx, rx) = oneshot::channel();
-    let query = query.to_lowercase();
+    let query = query.to_owned();
+    let query_lower = query.to_lowercase();
     let max_results = config.window.max_entries;
     let web_search_config = config.web_search.clone();
 
@@ -63,7 +66,7 @@ pub async fn search_applications(
                 results
             }
             Some(_) => {
-                let matcher = SkimMatcherV2::default().smart_case();
+                let matcher = SkimMatcherV2::default();
                 let mut results = Vec::with_capacity(max_results);
                 let mut seen_names = std::collections::HashSet::new();
 
@@ -71,12 +74,12 @@ pub async fn search_applications(
                     let name_lower = app.name.to_lowercase();
                     let name_key = name_lower.clone();
 
-                    if name_lower == query {
+                    if name_lower.eq_ignore_ascii_case(&query_lower) {
                         results.push(SearchResult {
                             app: app.clone(),
                             score: BONUS_SCORE_BINARY + calculate_bonus_score(app),
                         });
-                        seen_names.insert(name_key.clone());
+                        seen_names.insert(name_key);
 
                         for action in &app.actions {
                             let mut action_app = app.clone();
@@ -113,7 +116,7 @@ pub async fn search_applications(
                         }
                     }
 
-                    if app.keywords.iter().any(|k| k.to_lowercase() == query) {
+                    if app.keywords.iter().any(|k| k.eq_ignore_ascii_case(&query)) {
                         results.push(SearchResult {
                             app: app.clone(),
                             score: BONUS_SCORE_KEYWORD_MATCH + calculate_bonus_score(app),
@@ -122,7 +125,11 @@ pub async fn search_applications(
                         continue;
                     }
 
-                    if app.categories.iter().any(|c| c.to_lowercase() == query) {
+                    if app
+                        .categories
+                        .iter()
+                        .any(|c| c.eq_ignore_ascii_case(&query))
+                    {
                         results.push(SearchResult {
                             app: app.clone(),
                             score: BONUS_SCORE_CATEGORY_MATCH + calculate_bonus_score(app),
@@ -180,7 +187,7 @@ pub async fn search_applications(
                     }
                 }
 
-                if !seen_names.contains(&query) {
+                if !seen_names.contains(&query_lower) {
                     if let Some(result) = check_binary(&query) {
                         results.push(result);
                     }
@@ -281,12 +288,12 @@ fn handle_path_search(query: &str) -> Vec<SearchResult> {
                 .map(|p| p.to_path_buf())
                 .unwrap_or_else(|| PathBuf::from("/")),
             path.file_name()
-                .map(|f| f.to_string_lossy().to_lowercase())
+                .map(|f| f.to_string_lossy().to_string())
                 .unwrap_or_default(),
         )
     };
 
-    let matcher = SkimMatcherV2::default().smart_case();
+    let matcher = SkimMatcherV2::default();
 
     std::fs::read_dir(&dir)
         .ok()
@@ -320,7 +327,23 @@ fn handle_path_search(query: &str) -> Vec<SearchResult> {
                 }
 
                 if !filter.is_empty() {
-                    if let Some(score) = matcher.fuzzy_match(&file_name_lower, &filter) {
+                    let filter_lower = filter.to_lowercase();
+                    if file_name_lower.contains(&filter_lower) {
+                        if let Some(app_entry) =
+                            launcher::create_file_entry(entry.path().to_string_lossy().into_owned())
+                        {
+                            let base_score = if app_entry.icon_name == "folder" {
+                                BONUS_SCORE_FOLDER
+                            } else {
+                                0
+                            };
+                            results.push(SearchResult {
+                                app: app_entry,
+                                score: BONUS_SCORE_BINARY + base_score,
+                            });
+                        }
+                    } else if let Some(score) = matcher.fuzzy_match(&file_name_lower, &filter_lower)
+                    {
                         if let Some(app_entry) =
                             launcher::create_file_entry(entry.path().to_string_lossy().into_owned())
                         {
@@ -350,7 +373,7 @@ fn handle_path_search(query: &str) -> Vec<SearchResult> {
                 }
             }
 
-            results.sort_unstable_by_key(|item| (-item.score, item.app.name.clone()));
+            results.sort_unstable_by_key(|item| (-item.score, item.app.name.to_lowercase()));
 
             if let Some(parent) = parent_entry {
                 results.insert(0, parent);
