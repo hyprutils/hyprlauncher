@@ -5,6 +5,7 @@ use gtk4::{
     Application, ApplicationWindow,
 };
 use std::{
+    env,
     fs::{self, File},
     io::Write,
     path::PathBuf,
@@ -17,6 +18,7 @@ use tokio::runtime::Runtime;
 pub struct App {
     app: Application,
     rt: Runtime,
+    entries: Option<Vec<String>>,
 }
 
 impl App {
@@ -47,13 +49,12 @@ impl App {
         app.register(None::<&gtk4::gio::Cancellable>)
             .expect("Failed to register application");
 
-        let (tx, rx) = mpsc::channel();
+        let (_tx, rx) = mpsc::channel::<()>();
         crate::config::Config::watch_changes(move || {
-            let _ = tx.send(());
+            let _ = _tx.send(());
         });
 
         let app_clone = app.clone();
-        let mut last_config = Config::load();
         let mut last_update = Instant::now();
 
         glib::timeout_add_local(Duration::from_millis(100), move || {
@@ -63,17 +64,11 @@ impl App {
                     if let Some(window) = app_clone.windows().first() {
                         log!("Loading new config for comparison");
                         let new_config = Config::load();
-                        if new_config != last_config {
-                            if let Some(launcher_window) =
-                                window.downcast_ref::<ApplicationWindow>()
-                            {
-                                log!("Config changed, updating window");
-                                LauncherWindow::update_window_config(launcher_window, &new_config);
-                                last_config = new_config;
-                                last_update = now;
-                            }
-                        } else {
-                            log!("Config unchanged");
+
+                        if let Some(launcher_window) = window.downcast_ref::<ApplicationWindow>() {
+                            log!("Updating window CSS");
+                            LauncherWindow::update_window_config(launcher_window, &new_config);
+                            last_update = now;
                         }
                     }
                 }
@@ -92,27 +87,70 @@ impl App {
             );
         }
 
-        Self { app, rt }
+        Self {
+            app,
+            rt,
+            entries: None,
+        }
+    }
+
+    pub fn new_dmenu(entries: Vec<String>) -> Self {
+        log!("Initializing dmenu application runtime...");
+        let rt = Runtime::new().expect("Failed to create Tokio runtime");
+
+        log!("Creating new dmenu application instance");
+        let app = Application::builder()
+            .application_id("hyprutils.hyprlauncher.dmenu")
+            .flags(
+                gtk4::gio::ApplicationFlags::NON_UNIQUE
+                    | gtk4::gio::ApplicationFlags::HANDLES_COMMAND_LINE,
+            )
+            .build();
+
+        app.register(None::<&gtk4::gio::Cancellable>)
+            .expect("Failed to register application");
+
+        let rt_handle = rt.handle().clone();
+        let entries_clone = entries.clone();
+
+        app.connect_activate(move |app| {
+            let window = LauncherWindow::new_dmenu(app, rt_handle.clone(), entries_clone.clone());
+            window.present();
+        });
+
+        app.connect_command_line(|app, _cmdline| {
+            app.activate();
+            0
+        });
+
+        Self {
+            app,
+            rt,
+            entries: Some(entries),
+        }
     }
 
     pub fn run(&self) -> i32 {
         let rt_handle = self.rt.handle().clone();
+        let entries = self.entries.clone();
 
         self.app.connect_activate(move |app| {
             let windows = app.windows();
             if let Some(window) = windows.first() {
                 window.present();
             } else {
-                let window = LauncherWindow::new(app, rt_handle.clone());
+                let window = if let Some(entries) = &entries {
+                    LauncherWindow::new_dmenu(app, rt_handle.clone(), entries.clone())
+                } else {
+                    LauncherWindow::new(app, rt_handle.clone())
+                };
                 window.present();
             }
         });
 
         let status = self.app.run();
 
-        if !self.app.is_remote() {
-            self.app.quit();
-
+        if self.entries.is_none() {
             if let Some(instance_file) = Self::get_instance_file() {
                 let _ = fs::remove_file(instance_file);
             }
@@ -121,14 +159,19 @@ impl App {
         status.into()
     }
 
+    fn get_runtime_dir() -> PathBuf {
+        let xdg_runtime_dir = env::var("XDG_RUNTIME_DIR").unwrap_or(String::from("/tmp"));
+        PathBuf::from(format!("{}/hyprlauncher", xdg_runtime_dir))
+    }
+
     fn get_instance_file() -> Option<PathBuf> {
-        let runtime_dir = PathBuf::from("/tmp/hyprlauncher");
+        let runtime_dir = Self::get_runtime_dir();
         let pid = process::id();
         Some(runtime_dir.join(format!("instance-{}", pid)))
     }
 
     fn can_create_instance() -> bool {
-        let runtime_dir = PathBuf::from("/tmp/hyprlauncher");
+        let runtime_dir = Self::get_runtime_dir();
         fs::create_dir_all(&runtime_dir)
             .unwrap_or_else(|_| panic!("Failed to create runtime directory"));
 

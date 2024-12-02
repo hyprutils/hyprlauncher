@@ -65,8 +65,11 @@ pub struct Colors {
     pub search_text: String,
     pub search_caret: String,
     pub item_name: String,
+    pub item_name_selected: String,
     pub item_description: String,
+    pub item_description_selected: String,
     pub item_path: String,
+    pub item_path_selected: String,
     pub border: String,
 }
 
@@ -82,8 +85,11 @@ impl Default for Colors {
             search_text: String::from("#e0e0e0"),
             search_caret: String::from("#808080"),
             item_name: String::from("#ffffff"),
+            item_name_selected: String::from("#ffffff"),
             item_description: String::from("#a0a0a0"),
+            item_description_selected: String::from("#a0a0a0"),
             item_path: String::from("#808080"),
+            item_path_selected: String::from("#808080"),
             border: String::from("#333333"),
         }
     }
@@ -175,10 +181,12 @@ pub struct Window {
     pub show_paths: bool,
     pub show_icons: bool,
     pub show_search: bool,
+    pub show_actions: bool,
     pub custom_navigate_keys: NavigateKeys,
     pub show_border: bool,
     pub border_width: i32,
     pub use_gtk_colors: bool,
+    pub use_custom_css: bool,
     pub max_entries: usize,
 }
 
@@ -191,6 +199,7 @@ impl Default for Window {
             show_paths: false,
             show_icons: true,
             show_search: true,
+            show_actions: false,
             custom_navigate_keys: NavigateKeys::default(),
             anchor: WindowAnchor::center,
             margin_top: 0,
@@ -200,6 +209,7 @@ impl Default for Window {
             show_border: true,
             border_width: 2,
             use_gtk_colors: false,
+            use_custom_css: false,
             max_entries: 50,
         }
     }
@@ -374,6 +384,17 @@ impl Config {
     }
 
     pub fn get_css(&self) -> String {
+        if self.window.use_custom_css {
+            let custom_css_path = Self::config_dir().join("style.css");
+            if let Ok(css) = fs::read_to_string(&custom_css_path) {
+                return css;
+            }
+            log!(
+                "Custom CSS file not found at {:?}, falling back to default styling",
+                custom_css_path
+            );
+        }
+
         let theme = &self.theme;
         let window = &self.window;
 
@@ -422,9 +443,11 @@ impl Config {
                     caret-color: @theme_text_color;
                     font-size: {}px;
                     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+                    outline: none;
                 }}
                 entry:focus {{
                     background-color: @theme_base_color;
+                    outline: none;
                 }}
                 .app-name {{
                     color: @theme_text_color;
@@ -432,16 +455,28 @@ impl Config {
                     font-weight: bold;
                     margin-right: 8px;
                 }}
+                listview > row:selected .app-name,
+                listview > row:hover:not(:selected) .app-name {{
+                    color: @theme_selected_fg_color;
+                }}
                 .app-description {{
                     color: mix(@theme_fg_color, @theme_bg_color, 0.7);
                     font-size: {}px;
                     margin-right: 8px;
+                }}
+                listview > row:selected .app-description,
+                listview > row:hover:not(:selected) .app-description {{
+                    color: mix(@theme_selected_fg_color, @theme_bg_color, 0.7);
                 }}
                 .app-path {{
                     color: mix(@theme_fg_color, @theme_bg_color, 0.5);
                     font-size: {}px;
                     font-family: {};
                     opacity: 0.8;
+                }}
+                listview > row:selected .app-path,
+                listview > row:hover:not(:selected) .app-path {{
+                    color: mix(@theme_selected_fg_color, @theme_bg_color, 0.6);
                 }}
                 scrollbar {{ opacity: 0; }}",
                 theme.corners.window,
@@ -490,9 +525,11 @@ impl Config {
                     caret-color: {};
                     font-size: {}px;
                     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+                    outline: none;
                 }}
                 entry:focus {{
                     background-color: {};
+                    outline: none;
                 }}
                 .app-name {{
                     color: {};
@@ -500,16 +537,28 @@ impl Config {
                     font-weight: bold;
                     margin-right: 8px;
                 }}
+                listview > row:selected .app-name,
+                listview > row:hover:not(:selected) .app-name {{
+                    color: {};
+                }}
                 .app-description {{
                     color: {};
                     font-size: {}px;
                     margin-right: 8px;
+                }}
+                listview > row:selected .app-description,
+                listview > row:hover:not(:selected) .app-description {{
+                    color: {};
                 }}
                 .app-path {{
                     color: {};
                     font-size: {}px;
                     font-family: {};
                     opacity: 0.8;
+                }}
+                listview > row:selected .app-path,
+                listview > row:hover:not(:selected) .app-path {{
+                    color: {};
                 }}
                 scrollbar {{ opacity: 0; }}",
                 theme.colors.window_bg,
@@ -532,17 +581,21 @@ impl Config {
                 theme.colors.search_bg_focused,
                 theme.colors.item_name,
                 theme.typography.item_name_size,
+                theme.colors.item_name_selected,
                 theme.colors.item_description,
                 theme.typography.item_description_size,
+                theme.colors.item_description_selected,
                 theme.colors.item_path,
                 theme.typography.item_path_size,
                 theme.typography.item_path_font_family,
+                theme.colors.item_path_selected,
             )
         }
     }
 
     pub fn watch_changes<F: Fn() + Send + 'static>(callback: F) {
         let config_path = Self::config_dir().join("config.json");
+        let css_path = Self::config_dir().join("style.css");
         log!("Setting up config file watcher for: {:?}", config_path);
 
         let mut last_content = match fs::read_to_string(&config_path) {
@@ -554,6 +607,14 @@ impl Config {
                 log!("Error reading initial config: {}", e);
                 None
             }
+        };
+
+        let mut last_css_content = match fs::read_to_string(&css_path) {
+            Ok(content) => {
+                log!("Initial CSS content loaded");
+                Some(content)
+            }
+            Err(_) => None,
         };
 
         let mut last_update = std::time::Instant::now();
@@ -576,23 +637,36 @@ impl Config {
                         if now.duration_since(last_update).as_millis() > 250 {
                             thread::sleep(Duration::from_millis(50));
 
-                            match fs::read_to_string(&config_path) {
+                            let config_changed = match fs::read_to_string(&config_path) {
                                 Ok(new_content) => {
                                     if last_content.as_ref() != Some(&new_content) {
-                                        log!("Config content changed");
-                                        log!(
-                                            "Old content length: {}",
-                                            last_content.as_ref().map(|c| c.len()).unwrap_or(0)
-                                        );
-                                        log!("New content length: {}", new_content.len());
                                         last_content = Some(new_content);
-                                        last_update = now;
-                                        callback();
+                                        true
                                     } else {
-                                        log!("Config content unchanged");
+                                        false
                                     }
                                 }
-                                Err(e) => log!("Error reading config file: {}", e),
+                                Err(e) => {
+                                    log!("Error reading config file: {}", e);
+                                    false
+                                }
+                            };
+
+                            let css_changed = match fs::read_to_string(&css_path) {
+                                Ok(new_content) => {
+                                    if last_css_content.as_ref() != Some(&new_content) {
+                                        last_css_content = Some(new_content);
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                Err(_) => false,
+                            };
+
+                            if config_changed || css_changed {
+                                last_update = now;
+                                callback();
                             }
                         }
                     }

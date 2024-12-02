@@ -2,8 +2,9 @@
 
 <h2>Hyprlauncher <img src='https://raw.githubusercontent.com/hyprutils/.github/refs/heads/main/hyprutils_transparent.png'width='18' height='18'></h2>
 
-<img src='hyprlauncher.png' width='200' height='200'>
+<img src='hyprlauncher.png' width='200' height='200'><br>
 
+[![Grind Compliant](https://img.shields.io/badge/Grind-Compliant-blue)](https://github.com/The-Grindhouse/guidelines)<br>
 An unofficial [daemon-like](https://en.wikipedia.org/wiki/Daemon_(computing)) GUI for launching applications, built with GTK4 and Rust. 🚀🦀<br>
 
 ## Preview
@@ -20,6 +21,13 @@ Example Hyprland config bind:
 ```conf
 bind = $mainMod_SHIFT, E, exec, hyprlauncher
 ```
+
+## Configuration
+For configuration options and customization, see [configuration.md](configuration.md).
+
+The configuration file is located at `~/.config/hyprlauncher/config.json`
+
+Changes to the configuration file are applied instantly without needing to restart.
 
 ## Installation
 
