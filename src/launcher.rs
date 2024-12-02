@@ -2,7 +2,13 @@ use crate::log;
 use once_cell::sync::Lazy;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fs, os::unix::fs::PermissionsExt, path::PathBuf};
+use std::{
+    collections::HashMap,
+    fs,
+    os::unix::fs::PermissionsExt,
+    path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use tokio::sync::RwLock;
 
 pub static APP_CACHE: Lazy<RwLock<HashMap<String, AppEntry>>> =
@@ -23,6 +29,7 @@ pub struct AppEntry {
     pub exec: String,
     pub icon_name: String,
     pub launch_count: u32,
+    pub last_used: Option<u64>,
     pub entry_type: EntryType,
     pub score_boost: i64,
     pub keywords: Vec<String>,
@@ -49,11 +56,26 @@ static DESKTOP_PATHS: &[&str] = &[
 
 const DEFAULT_SCORE_BOOST: i64 = 2000;
 
+#[derive(Serialize, Deserialize)]
+pub struct HeatmapEntry {
+    pub count: u32,
+    pub last_used: u64,
+}
+
 pub fn increment_launch_count(app: &AppEntry) -> Result<u32, std::io::Error> {
     let app_name = app.name.clone();
     let count = app.launch_count + 1;
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
 
     std::thread::spawn(move || {
+        let mut cache = APP_CACHE.blocking_write();
+        if let Some(cached_app) = cache.get_mut(&app_name) {
+            cached_app.launch_count = count;
+            cached_app.last_used = Some(now);
+        }
         save_heatmap(&app_name, count).unwrap();
     });
 
@@ -68,8 +90,19 @@ fn save_heatmap(name: &str, count: u32) -> Result<(), std::io::Error> {
         let _ = std::fs::create_dir_all(dir);
     }
 
-    let mut heatmap = load_heatmap()?;
-    heatmap.insert(name.to_string(), count);
+    let mut heatmap: HashMap<String, HeatmapEntry> = load_heatmap()?;
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    heatmap.insert(
+        name.to_string(),
+        HeatmapEntry {
+            count,
+            last_used: now,
+        },
+    );
 
     if let Ok(contents) = serde_json::to_string(&heatmap) {
         let _ = fs::write(path, contents);
@@ -78,8 +111,7 @@ fn save_heatmap(name: &str, count: u32) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-#[inline]
-fn load_heatmap() -> Result<HashMap<String, u32>, std::io::Error> {
+pub fn load_heatmap() -> Result<HashMap<String, HeatmapEntry>, std::io::Error> {
     let path = shellexpand::tilde(HEATMAP_PATH).to_string();
     Ok(fs::read_to_string(path)
         .ok()
@@ -109,8 +141,7 @@ pub fn get_desktop_paths() -> Vec<PathBuf> {
 
 pub async fn load_applications() -> Result<(), std::io::Error> {
     log!("Starting application loading process");
-    let heatmap_future = tokio::task::spawn_blocking(load_heatmap);
-
+    let heatmap = load_heatmap()?;
     let desktop_paths = get_desktop_paths();
     log!("Scanning desktop entry paths: {:?}", desktop_paths);
     let mut apps = HashMap::with_capacity(2000);
@@ -135,10 +166,10 @@ pub async fn load_applications() -> Result<(), std::io::Error> {
         })
         .collect();
 
-    let heatmap = heatmap_future.await?;
     for mut entry in entries {
-        if let Some(count) = heatmap.as_ref().unwrap().get(&entry.name) {
-            entry.launch_count = *count;
+        if let Some(heat_entry) = heatmap.get(&entry.name) {
+            entry.launch_count = heat_entry.count;
+            entry.last_used = Some(heat_entry.last_used);
         }
         apps.insert(entry.name.clone(), entry);
     }
@@ -260,6 +291,7 @@ fn parse_desktop_entry(path: &std::path::Path) -> Option<AppEntry> {
         description: desc,
         path: path.to_string_lossy().into_owned(),
         launch_count: 0,
+        last_used: None,
         entry_type: EntryType::Application,
         score_boost: 0,
         keywords,
@@ -277,6 +309,10 @@ pub fn create_file_entry(path: String) -> Option<AppEntry> {
     };
 
     let metadata = std::fs::metadata(&path).ok()?;
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
 
     if !metadata.is_file() && !metadata.is_dir() {
         return None;
@@ -303,6 +339,7 @@ pub fn create_file_entry(path: String) -> Option<AppEntry> {
         description: String::new(),
         path,
         launch_count: 0,
+        last_used: Some(now),
         entry_type: EntryType::File,
         score_boost,
         keywords: Vec::new(),

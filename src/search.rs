@@ -4,20 +4,28 @@ use crate::{
 };
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::{os::unix::fs::PermissionsExt, path::PathBuf};
 use tokio::sync::oneshot;
+use x11rb::connection::Connection;
+use x11rb::protocol::xproto::{self, ConnectionExt};
 
-const BONUS_SCORE_LAUNCH_COUNT: i64 = 100;
 const BONUS_SCORE_ICON_NAME: i64 = 1000;
 const BONUS_SCORE_BINARY: i64 = 3000;
 const BONUS_SCORE_FOLDER: i64 = 2000;
 const BONUS_SCORE_KEYWORD_MATCH: i64 = 2500;
 const BONUS_SCORE_CATEGORY_MATCH: i64 = 2000;
 const BONUS_SCORE_WEB_SEARCH: i64 = -1000;
+const OPEN_WINDOW_PENALTY: i64 = -500;
 
 pub struct SearchResult {
     pub app: AppEntry,
     pub score: i64,
+}
+pub struct HistoryEntry {
+    last_used: u64,
+    use_count: i64,
 }
 
 fn get_filename_without_extension(path: &str) -> Option<String> {
@@ -32,6 +40,33 @@ fn should_exclude_web_search(query: &str) -> bool {
     excluded_terms
         .iter()
         .any(|term| query.eq_ignore_ascii_case(term))
+}
+
+fn get_active_window_classes() -> Vec<String> {
+    let (conn, screen_num) = x11rb::connect(None).unwrap();
+    let screen = &conn.setup().roots[screen_num];
+    let mut classes = Vec::new();
+
+    if let Ok(tree) = conn.query_tree(screen.root).unwrap().reply() {
+        for window in tree.children {
+            if let Ok(cookie) = conn.get_property(
+                false,
+                window,
+                xproto::AtomEnum::WM_CLASS,
+                xproto::AtomEnum::STRING,
+                0,
+                1024,
+            ) {
+                if let Ok(props) = cookie.reply() {
+                    if let Ok(class) = String::from_utf8(props.value) {
+                        classes.push(class.to_lowercase());
+                    }
+                }
+            }
+        }
+    }
+
+    classes
 }
 
 pub async fn search_applications(
@@ -237,12 +272,35 @@ pub async fn search_applications(
 
 #[inline(always)]
 fn calculate_bonus_score(app: &AppEntry) -> i64 {
-    (app.launch_count as i64 * BONUS_SCORE_LAUNCH_COUNT)
-        + if app.icon_name == "application-x-executable" {
-            0
-        } else {
-            BONUS_SCORE_ICON_NAME
-        }
+    let mut score = 0;
+    let history = load_history();
+
+    if let Some(entry) = history.get(&app.name) {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let seconds_since_used = (now - entry.last_used) as i64;
+        score = 10000 - (seconds_since_used / 10);
+
+        score += (entry.use_count * 20).min(200);
+    } else {
+        score += (app.launch_count as i64 * 20).min(200);
+    }
+
+    if app.icon_name != "application-x-executable" {
+        score += BONUS_SCORE_ICON_NAME;
+    }
+
+    let active_windows = get_active_window_classes();
+    if active_windows.iter().any(|class| {
+        app.name.to_lowercase().contains(class) || app.exec.to_lowercase().contains(class)
+    }) {
+        score += OPEN_WINDOW_PENALTY;
+    }
+
+    score
 }
 
 #[inline(always)]
@@ -253,6 +311,11 @@ fn check_binary(query: &str) -> Option<SearchResult> {
     }
 
     let bin_path = format!("/usr/bin/{}", parts[0]);
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
     std::fs::metadata(&bin_path)
         .ok()
         .filter(|metadata| metadata.permissions().mode() & 0o111 != 0)
@@ -268,6 +331,7 @@ fn check_binary(query: &str) -> Option<SearchResult> {
                 },
                 icon_name: String::from("application-x-executable"),
                 launch_count: 0,
+                last_used: Some(now),
                 entry_type: EntryType::File,
                 score_boost: BONUS_SCORE_BINARY,
                 keywords: Vec::new(),
@@ -436,6 +500,11 @@ pub async fn search_dmenu(
 }
 
 fn create_web_search_entry(query: &str, config: &WebSearch) -> SearchResult {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
     if let Some(colon_pos) = query.find(':') {
         let (prefix, search_term) = query.split_at(colon_pos);
         let search_term = &search_term[1..];
@@ -453,6 +522,7 @@ fn create_web_search_entry(query: &str, config: &WebSearch) -> SearchResult {
                     ),
                     icon_name: String::from("web-browser"),
                     launch_count: 0,
+                    last_used: Some(now),
                     entry_type: EntryType::Application,
                     score_boost: 0,
                     keywords: Vec::new(),
@@ -477,6 +547,7 @@ fn create_web_search_entry(query: &str, config: &WebSearch) -> SearchResult {
             ),
             icon_name: String::from("web-browser"),
             launch_count: 0,
+            last_used: Some(now),
             entry_type: EntryType::Application,
             score_boost: 0,
             keywords: Vec::new(),
@@ -486,4 +557,22 @@ fn create_web_search_entry(query: &str, config: &WebSearch) -> SearchResult {
         },
         score: BONUS_SCORE_WEB_SEARCH,
     }
+}
+
+fn load_history() -> HashMap<String, HistoryEntry> {
+    let mut history = HashMap::new();
+
+    if let Ok(heatmap) = launcher::load_heatmap() {
+        for (name, entry) in heatmap {
+            history.insert(
+                name,
+                HistoryEntry {
+                    last_used: entry.last_used,
+                    use_count: entry.count.into(),
+                },
+            );
+        }
+    }
+
+    history
 }

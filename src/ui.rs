@@ -15,7 +15,12 @@ use gtk4::{
     STYLE_PROVIDER_PRIORITY_USER,
 };
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
-use std::{cell::RefCell, process::Command, rc::Rc};
+use std::{
+    cell::RefCell,
+    process::Command,
+    rc::Rc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use tokio::runtime::Handle;
 
 pub struct LauncherWindow {
@@ -348,6 +353,12 @@ impl LauncherWindow {
                 exec: entry,
                 icon_name: String::new(),
                 launch_count: 0,
+                last_used: Some(
+                    SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs(),
+                ),
                 entry_type: EntryType::File,
                 score_boost: 0,
                 keywords: Vec::new(),
@@ -678,6 +689,12 @@ impl LauncherWindow {
                             exec: name,
                             icon_name: String::new(),
                             launch_count: 0,
+                            last_used: Some(
+                                SystemTime::now()
+                                    .duration_since(UNIX_EPOCH)
+                                    .unwrap()
+                                    .as_secs(),
+                            ),
                             entry_type: EntryType::File,
                             score_boost: 0,
                             keywords: Vec::new(),
