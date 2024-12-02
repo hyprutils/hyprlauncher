@@ -871,10 +871,6 @@ fn launch_application(app: &AppEntry, search_entry: &gtk4::SearchEntry) -> bool 
             search_entry.set_text("__refresh__");
             search_entry.set_text("");
         }
-        EntryType::Calculation => {
-            log!("Copying calculation result");
-            Command::new("sh").arg("-c").arg(&app.exec).spawn().is_ok()
-        }
     }
 
     success

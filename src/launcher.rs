@@ -40,7 +40,6 @@ pub struct AppEntry {
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub enum EntryType {
     Application,
-    Calculation,
 }
 
 static HEATMAP_PATH: &str = "~/.local/share/hyprlauncher/heatmap.json";
@@ -295,18 +294,5 @@ fn parse_desktop_entry(path: &std::path::Path) -> Option<AppEntry> {
         categories,
         terminal,
         actions,
-    })
-}
-
-pub fn create_calc_entry(res: String) -> Option<AppEntry> {
-    Some(AppEntry {
-        name: res.to_string(),
-        exec: format!("wl-copy -t text/plain \"{}\"", res),
-        icon_name: String::new(),
-        description: String::from("Click to copy to clipboard"),
-        path: String::new(),
-        launch_count: 0,
-        entry_type: EntryType::Calculation,
-        score_boost: 1000,
     })
 }

@@ -21,6 +21,7 @@ const BONUS_SCORE_BINARY: i64 = 3000;
 const BONUS_SCORE_KEYWORD_MATCH: i64 = 2500;
 const BONUS_SCORE_CATEGORY_MATCH: i64 = 2000;
 const BONUS_SCORE_WEB_SEARCH: i64 = -1000;
+const BONUS_SCORE_CALC: i64 = 1000;
 const OPEN_WINDOW_PENALTY: i64 = -500;
 
 pub struct SearchResult {
@@ -81,11 +82,7 @@ pub async fn search_applications(
     tokio::task::spawn_blocking(move || {
         let cache = APP_CACHE.blocking_read();
 
-
         let mut results = match query.chars().next() {
-            
-            Some('=') if calculator_enabled => handle_calculation(&query),
-          
             None => {
                 let mut results = Vec::with_capacity(max_results);
                 for app in cache.values() {
@@ -220,10 +217,18 @@ pub async fn search_applications(
                     results.push(create_web_search_entry(&query, &web_search_config));
                 }
 
+                if results.is_empty()
+                    && calculator_enabled
+                    && query.chars().next().unwrap().is_ascii_digit()
+                {
+                    results.push(create_calc_entry(&query));
+                }
+
                 results.sort_unstable_by_key(|item| -item.score);
                 if results.len() > max_results {
                     results.truncate(max_results);
                 }
+
                 results
             }
         };
@@ -446,9 +451,36 @@ fn load_history() -> HashMap<String, HistoryEntry> {
     history
 }
 
+fn create_calc_entry(query: &str) -> SearchResult {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    let res = handle_calculation(query);
+
+    SearchResult {
+        app: AppEntry {
+            name: res.clone(),
+            description: String::from("Copy to clipboard"),
+            path: String::new(),
+            exec: format!("wl-copy -t text/plain \"{}\"", &res),
+            icon_name: String::from("calculator"),
+            launch_count: 0,
+            last_used: Some(now),
+            entry_type: EntryType::Application,
+            score_boost: 0,
+            keywords: Vec::new(),
+            categories: vec![String::from("Calculation")],
+            terminal: false,
+            actions: Vec::new(),
+        },
+        score: BONUS_SCORE_CALC,
+    }
+}
+
 #[inline(always)]
-fn handle_calculation(query: &str) -> Vec<SearchResult> {
-    let query = &query[1..];
+fn handle_calculation(query: &str) -> String {
     let mut ctx = simple_context().unwrap();
 
     let res = match one_line(&mut ctx, query) {
@@ -456,17 +488,8 @@ fn handle_calculation(query: &str) -> Vec<SearchResult> {
         Err(_e) => "0".to_string(),
     };
 
-    let res = match res.find("(") {
-        Some(pos) => &res[..pos - 1].to_string(),
-        None => &res,
-    };
-
-    let entry = launcher::create_calc_entry(res.clone()).unwrap();
-
-    let entries: Vec<_> = vec![SearchResult {
-        app: entry,
-        score: 5000,
-    }];
-
-    entries
+    match res.find("(") {
+        Some(pos) => res[..pos - 1].to_string(),
+        None => res,
+    }
 }
