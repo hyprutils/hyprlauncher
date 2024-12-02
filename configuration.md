@@ -84,7 +84,7 @@ The configuration file controls the appearance and behavior of the launcher wind
   },
   "web_search": {
     "enabled": false,          // Enable/disable web search functionality
-    "engine": "duckduckgo"     // Search engine to use
+    "engine": "duckduckgo"     // Use preset engine name
   }
 }
 ```
@@ -166,17 +166,30 @@ Navigation can be customized using the `custom_navigate_keys` setting:
   {
     "web_search": {
       "enabled": false,          // Enable/disable web search functionality
-      "engine": "duckduckgo"     // Search engine to use
+      "engine": "duckduckgo"     // Use preset engine name
     }
   }
   ```
-- Available search engines:
+  Or with a custom search engine URL:
+  ```json
+  {
+    "web_search": {
+      "enabled": true,
+      "engine": "https://mysearchengine.com/search?q="    // Custom search URL
+    }
+  }
+  ```
+- Available preset engines:
   - `duckduckgo` (default)
   - `google`
   - `bing`
   - `brave`
   - `ecosia`
   - `startpage`
+- Custom search engines:
+  - Provide the full search URL with the query parameter placeholder
+  - The URL must end with the query parameter (e.g., `?q=`, `?query=`, `?search=`)
+  - The search term will be automatically URL-encoded and appended to this URL
 
 ## Hot Reloading
 The configuration file is watched for changes and will automatically reload when modified. No need to restart the application.
