@@ -22,6 +22,13 @@ Example Hyprland config bind:
 bind = $mainMod_SHIFT, E, exec, hyprlauncher
 ```
 
+## Configuration
+For configuration options and customization, see [configuration.md](configuration.md).
+
+The configuration file is located at `~/.config/hyprlauncher/config.json`
+
+Changes to the configuration file are applied instantly without needing to restart.
+
 ## Installation
 
 [![Packaging status](https://repology.org/badge/vertical-allrepos/hyprlauncher.svg)](https://repology.org/project/hyprlauncher/versions)
