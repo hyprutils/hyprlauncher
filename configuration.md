@@ -75,9 +75,6 @@ The configuration file controls the appearance and behavior of the launcher wind
     "disable_auto_focus": false,  // Disable automatic keyboard focus
     "enable_logging": false       // Enable application logging
   },
-  "finder": {
-    "show_hidden": false         // Show hidden files (dotfiles) in file browser
-  },
   "dmenu": {
     "allow_invalid": false,      // Allow invalid entries when no matches are found
     "case_sensitive": false      // Enable case-sensitive matching
@@ -155,11 +152,6 @@ Navigation can be customized using the `custom_navigate_keys` setting:
 ### Debug Options
 - `disable_auto_focus`: Prevents the window from automatically holding all input
 - `enable_logging`: Enables logging to the terminal window Hyprlauncher was launched from
-
-### Finder Options
-- `show_hidden`: Controls visibility of hidden files (dotfiles) in the file browser
-  - When disabled (default), files and directories starting with `.` are hidden
-  - The parent directory `..` is always shown regardless of this setting
 
 ### Dmenu Mode
 - Alternative mode that mimics dmenu functionality
