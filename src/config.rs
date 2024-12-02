@@ -259,7 +259,6 @@ pub enum SearchEngine {
     Ecosia,
     #[serde(rename = "startpage")]
     Startpage,
-    Custom(String),
 }
 
 impl SearchEngine {
@@ -271,7 +270,6 @@ impl SearchEngine {
             SearchEngine::Brave => String::from("https://search.brave.com/search?q="),
             SearchEngine::Ecosia => String::from("https://www.ecosia.org/search?q="),
             SearchEngine::Startpage => String::from("https://www.startpage.com/do/search?q="),
-            SearchEngine::Custom(url) => url.clone(),
         }
     }
 }

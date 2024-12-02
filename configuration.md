@@ -155,17 +155,6 @@ Navigation can be customized using the `custom_navigate_keys` setting:
   - `brave`
   - `ecosia`
   - `startpage`
-  - `custom` - Specify a custom search engine URL:
-    ```json
-    {
-      "web_search": {
-        "enabled": true,
-        "engine": { "Custom": "https://your-search-engine.com/search?q=" }
-      }
-    }
-    ```
-- When enabled, shows a "Search '[query]' on the web" option if no matching applications are found
-- Opens the search query in your default web browser
 
 ## Hot Reloading
 The configuration file is watched for changes and will automatically reload when modified. No need to restart the application.
