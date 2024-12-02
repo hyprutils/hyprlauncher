@@ -43,6 +43,7 @@ pub async fn search_applications(
     let query_lower = query.to_lowercase();
     let max_results = config.window.max_entries;
     let web_search_config = config.web_search.clone();
+    let show_actions = config.window.show_actions;
 
     tokio::task::spawn_blocking(move || {
         let cache = APP_CACHE.blocking_read();
@@ -140,17 +141,19 @@ pub async fn search_applications(
                         }
                     }
 
-                    for action in &app.actions {
-                        let mut action_app = app.clone();
-                        action_app.name = format!("{} - {}", app.name, action.name);
-                        action_app.exec = action.exec.clone();
-                        if let Some(icon) = &action.icon_name {
-                            action_app.icon_name = icon.clone();
+                    if show_actions {
+                        for action in &app.actions {
+                            let mut action_app = app.clone();
+                            action_app.name = format!("{} - {}", app.name, action.name);
+                            action_app.exec = action.exec.clone();
+                            if let Some(icon) = &action.icon_name {
+                                action_app.icon_name = icon.clone();
+                            }
+                            results.push(SearchResult {
+                                app: action_app,
+                                score: calculate_bonus_score(app) - 100,
+                            });
                         }
-                        results.push(SearchResult {
-                            app: action_app,
-                            score: calculate_bonus_score(app) - 100,
-                        });
                     }
 
                     if !added {
