@@ -136,11 +136,9 @@ Navigation can be customized using the `custom_navigate_keys` setting:
 - `delete_word`: Key to delete word in search (default: "CTRL + h")
 
 ### Search
-- The search bar can be focused by pressing `/`
-- Escape clears the search or moves focus to the results list
+- The search bar is always focused
+- Escape exits the launcher
 - Supports fuzzy matching for application names
-- Special path searching with `~`, `$`, or `/` prefixes
-- Search results are ranked by launch frequency
 
 ### Context-Aware Search
 - Applications are ranked based on usage patterns and launch frequency
