@@ -581,6 +581,7 @@ impl Config {
 
     pub fn watch_changes<F: Fn() + Send + 'static>(callback: F) {
         let config_path = Self::config_dir().join("config.json");
+        let css_path = Self::config_dir().join("style.css");
         log!("Setting up config file watcher for: {:?}", config_path);
 
         let mut last_content = match fs::read_to_string(&config_path) {
@@ -592,6 +593,14 @@ impl Config {
                 log!("Error reading initial config: {}", e);
                 None
             }
+        };
+
+        let mut last_css_content = match fs::read_to_string(&css_path) {
+            Ok(content) => {
+                log!("Initial CSS content loaded");
+                Some(content)
+            }
+            Err(_) => None,
         };
 
         let mut last_update = std::time::Instant::now();
@@ -614,23 +623,36 @@ impl Config {
                         if now.duration_since(last_update).as_millis() > 250 {
                             thread::sleep(Duration::from_millis(50));
 
-                            match fs::read_to_string(&config_path) {
+                            let config_changed = match fs::read_to_string(&config_path) {
                                 Ok(new_content) => {
                                     if last_content.as_ref() != Some(&new_content) {
-                                        log!("Config content changed");
-                                        log!(
-                                            "Old content length: {}",
-                                            last_content.as_ref().map(|c| c.len()).unwrap_or(0)
-                                        );
-                                        log!("New content length: {}", new_content.len());
                                         last_content = Some(new_content);
-                                        last_update = now;
-                                        callback();
+                                        true
                                     } else {
-                                        log!("Config content unchanged");
+                                        false
                                     }
                                 }
-                                Err(e) => log!("Error reading config file: {}", e),
+                                Err(e) => {
+                                    log!("Error reading config file: {}", e);
+                                    false
+                                }
+                            };
+
+                            let css_changed = match fs::read_to_string(&css_path) {
+                                Ok(new_content) => {
+                                    if last_css_content.as_ref() != Some(&new_content) {
+                                        last_css_content = Some(new_content);
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                Err(_) => false,
+                            };
+
+                            if config_changed || css_changed {
+                                last_update = now;
+                                callback();
                             }
                         }
                     }
