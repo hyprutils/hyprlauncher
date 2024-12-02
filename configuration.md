@@ -240,8 +240,9 @@ To use custom CSS:
 1. Enable custom CSS in your config.json:
 ```json
 {
-  "use_custom_css": true,
-  // ... rest of your config
+  "window": {
+    "use_custom_css": true
+  }
 }
 ```
 
