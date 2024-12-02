@@ -30,6 +30,7 @@ The configuration file controls the appearance and behavior of the launcher wind
     "show_border": true,         // Show window border
     "border_width": 2,           // Border width in pixels
     "use_gtk_colors": false,     // Use GTK theme colors instead of custom colors
+    "use_custom_css": false,     // Use custom CSS file for styling
     "max_entries": 50            // Maximum number of entries to show in the list
   },
   "theme": {
@@ -202,4 +203,110 @@ If the configuration file is invalid or missing certain values, Hyprlauncher wil
 3. Write the merged configuration back to the file
 
 The configuration file is strict and requires valid JSON format. Invalid configurations will fall back to defaults.
+
+### Custom Styling
+Hyprlauncher supports two methods of styling:
+
+1. Built-in Theme Configuration (Default)
+- Uses the theme settings from config.json
+- Provides a simple way to customize colors, spacing, and typography
+- Recommended for basic customization needs
+
+2. Custom CSS
+- Enables full control over the application's appearance
+- Activated by setting `use_custom_css: true` in config.json
+- CSS file location: `~/.config/hyprlauncher/style.css`
+
+To use custom CSS:
+
+1. Enable custom CSS in your config.json:
+```json
+{
+  "use_custom_css": true,
+  // ... rest of your config
+}
+```
+
+2. Create a style.css file in your Hyprlauncher config directory:
+
+```bash
+touch ~/.config/hyprlauncher/style.css
+```
+
+3. Add your custom CSS rules. Example style.css:
+```css
+window {
+    background-color: #1a1b26;
+    border-radius: 12px;
+    border: 2px solid #414868;
+}
+
+listview {
+    background: transparent;
+}
+
+listview > row {
+    padding: 8px;
+    margin: 4px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    transition: all 200ms ease;
+}
+
+listview > row:selected {
+    background-color: #7aa2f7;
+}
+
+entry {
+    margin: 12px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #c0caf5;
+    caret-color: #7aa2f7;
+    font-size: 16px;
+}
+
+.app-name {
+    color: #c0caf5;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.app-description {
+    color: #565f89;
+    font-size: 12px;
+}
+
+.app-path {
+    color: #414868;
+    font-size: 12px;
+    font-family: monospace;
+}
+```
+
+Available CSS Classes:
+- `window`: Main application window
+- `listview`: Application list container
+- `entry`: Search input field
+- `.app-name`: Application name text
+- `.app-description`: Application description text
+- `.app-path`: Application path text
+
+GTK CSS Properties:
+All standard GTK4 CSS properties are supported. Common properties include:
+- `background-color`
+- `color`
+- `border`
+- `border-radius`
+- `margin`
+- `padding`
+- `font-family`
+- `font-size`
+- `font-weight`
+- `transition`
+- `opacity`
+- `box-shadow`
+
+When `use_custom_css` is enabled, all theme settings from config.json are ignored in favor of your custom CSS rules.
 
