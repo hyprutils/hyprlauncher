@@ -868,6 +868,7 @@ fn launch_application(app: &AppEntry, search_entry: &gtk4::SearchEntry) -> bool 
                     };
                     search_entry.set_text(&path);
                     search_entry.set_position(-1);
+                    search_entry.grab_focus();
                     success = true;
                 } else {
                     log!("Opening file: {}", app.path);
