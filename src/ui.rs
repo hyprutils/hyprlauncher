@@ -359,7 +359,7 @@ impl LauncherWindow {
                         .unwrap()
                         .as_secs(),
                 ),
-                entry_type: EntryType::File,
+                entry_type: EntryType::Application,
                 score_boost: 0,
                 keywords: Vec::new(),
                 categories: Vec::new(),
@@ -695,7 +695,7 @@ impl LauncherWindow {
                                     .unwrap()
                                     .as_secs(),
                             ),
-                            entry_type: EntryType::File,
+                            entry_type: EntryType::Application,
                             score_boost: 0,
                             keywords: Vec::new(),
                             categories: Vec::new(),
@@ -854,52 +854,26 @@ fn launch_application(app: &AppEntry, search_entry: &gtk4::SearchEntry) -> bool 
             cached_app.launch_count = new_count;
         }
 
-        match app.entry_type {
-            EntryType::Application => {
-                log!("Launching application: {}", app.name);
-                if app.terminal {
-                    let terminal =
-                        std::env::var("TERMINAL").unwrap_or_else(|_| "xterm".to_string());
-                    success = Command::new(terminal)
-                        .arg("-e")
-                        .arg("sh")
-                        .arg("-c")
-                        .arg(&app.exec)
-                        .spawn()
-                        .is_ok()
-                } else {
-                    success = Command::new("sh").arg("-c").arg(&app.exec).spawn().is_ok()
-                }
-                if success {
-                    search_entry.set_text("__refresh__");
-                    search_entry.set_text("");
-                }
-            }
-            EntryType::File => {
-                if app.icon_name == "folder" {
-                    log!("Opening folder: {}", app.path);
-                    let path = if app.path.ends_with('/') {
-                        app.path.clone()
-                    } else {
-                        format!("{}/", app.path)
-                    };
-                    search_entry.set_text(&path);
-                    search_entry.set_position(-1);
-                    search_entry.grab_focus();
-                    success = true;
-                } else {
-                    log!("Opening file: {}", app.path);
-                    success = Command::new("sh").arg("-c").arg(&app.exec).spawn().is_ok();
-                    if success {
-                        search_entry.set_text("__refresh__");
-                        search_entry.set_text("");
-                    }
-                }
-            }
+        log!("Launching application: {}", app.name);
+        if app.terminal {
+            let terminal = std::env::var("TERMINAL").unwrap_or_else(|_| "xterm".to_string());
+            success = Command::new(terminal)
+                .arg("-e")
+                .arg("sh")
+                .arg("-c")
+                .arg(&app.exec)
+                .spawn()
+                .is_ok()
+        } else {
+            success = Command::new("sh").arg("-c").arg(&app.exec).spawn().is_ok()
+        }
+        if success {
+            search_entry.set_text("__refresh__");
+            search_entry.set_text("");
         }
     }
 
-    success && (app.entry_type != EntryType::File || app.icon_name != "folder")
+    success
 }
 
 trait WindowAnchoring {

@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     fs,
-    os::unix::fs::PermissionsExt,
     path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -41,7 +40,6 @@ pub struct AppEntry {
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub enum EntryType {
     Application,
-    File,
 }
 
 static HEATMAP_PATH: &str = "~/.local/share/hyprlauncher/heatmap.json";
@@ -53,8 +51,6 @@ static DESKTOP_PATHS: &[&str] = &[
     "~/.local/share/applications",
     "~/.local/share/flatpak/exports/share/applications",
 ];
-
-const DEFAULT_SCORE_BOOST: i64 = 2000;
 
 #[derive(Serialize, Deserialize)]
 pub struct HeatmapEntry {
@@ -299,79 +295,4 @@ fn parse_desktop_entry(path: &std::path::Path) -> Option<AppEntry> {
         terminal,
         actions,
     })
-}
-
-pub fn create_file_entry(path: String) -> Option<AppEntry> {
-    let path = if path.starts_with('~') || path.starts_with('$') {
-        shellexpand::full(&path).ok()?.to_string()
-    } else {
-        path
-    };
-
-    let metadata = std::fs::metadata(&path).ok()?;
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-
-    if !metadata.is_file() && !metadata.is_dir() {
-        return None;
-    }
-
-    let name = std::path::Path::new(&path)
-        .file_name()?
-        .to_str()?
-        .to_string();
-
-    let (icon_name, exec, score_boost) = if metadata.is_dir() {
-        ("folder", String::new(), DEFAULT_SCORE_BOOST)
-    } else if metadata.permissions().mode() & 0o111 != 0 {
-        ("application-x-executable", format!("\"{}\"", path), 0)
-    } else {
-        let (icon, exec) = get_mime_type_info(&path);
-        (icon, exec, 0)
-    };
-
-    Some(AppEntry {
-        name,
-        exec,
-        icon_name: icon_name.to_string(),
-        description: String::new(),
-        path,
-        launch_count: 0,
-        last_used: Some(now),
-        entry_type: EntryType::File,
-        score_boost,
-        keywords: Vec::new(),
-        categories: Vec::new(),
-        terminal: false,
-        actions: Vec::new(),
-    })
-}
-
-#[inline]
-fn get_mime_type_info(path: &str) -> (&'static str, String) {
-    let output = std::process::Command::new("file")
-        .arg("--mime-type")
-        .arg(path)
-        .output()
-        .ok();
-
-    let mime_type = output
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .unwrap_or_default();
-
-    let icon = if mime_type.contains("text/") {
-        "text-x-generic"
-    } else {
-        match std::path::Path::new(path)
-            .extension()
-            .and_then(|s| s.to_str())
-        {
-            Some("pdf") => "application-pdf",
-            _ => "application-x-generic",
-        }
-    };
-
-    (icon, format!("xdg-open \"{}\"", path))
 }
