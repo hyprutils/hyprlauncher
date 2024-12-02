@@ -150,9 +150,7 @@ impl App {
 
         let status = self.app.run();
 
-        if !self.app.is_remote() {
-            self.app.quit();
-
+        if self.entries.is_none() {
             if let Some(instance_file) = Self::get_instance_file() {
                 let _ = fs::remove_file(instance_file);
             }
