@@ -73,116 +73,111 @@ pub async fn search_applications(
                 for app in cache.values() {
                     let name_lower = app.name.to_lowercase();
                     let name_key = name_lower.clone();
+                    let mut added = false;
 
                     if name_lower.eq_ignore_ascii_case(&query_lower) {
                         results.push(SearchResult {
                             app: app.clone(),
                             score: BONUS_SCORE_BINARY + calculate_bonus_score(app),
                         });
-                        seen_names.insert(name_key);
-
-                        for action in &app.actions {
-                            let mut action_app = app.clone();
-                            action_app.name = format!("{} - {}", app.name, action.name);
-                            action_app.exec = action.exec.clone();
-                            if let Some(icon) = &action.icon_name {
-                                action_app.icon_name = icon.clone();
-                            }
-                            results.push(SearchResult {
-                                app: action_app,
-                                score: BONUS_SCORE_BINARY + calculate_bonus_score(app) - 100,
-                            });
-                        }
-                        continue;
+                        seen_names.insert(name_key.clone());
+                        added = true;
                     }
 
                     if let Some(filename) = get_filename_without_extension(&app.path) {
                         if filename == query {
-                            results.push(SearchResult {
-                                app: app.clone(),
-                                score: BONUS_SCORE_BINARY + calculate_bonus_score(app),
-                            });
-                            seen_names.insert(name_key.clone());
-                            continue;
-                        }
-
-                        if let Some(score) = matcher.fuzzy_match(&filename, &query) {
-                            results.push(SearchResult {
-                                app: app.clone(),
-                                score: score + calculate_bonus_score(app),
-                            });
-                            seen_names.insert(name_key.clone());
-                            continue;
+                            if !added {
+                                results.push(SearchResult {
+                                    app: app.clone(),
+                                    score: BONUS_SCORE_BINARY + calculate_bonus_score(app),
+                                });
+                                seen_names.insert(name_key.clone());
+                                added = true;
+                            }
+                        } else if let Some(score) = matcher.fuzzy_match(&filename, &query) {
+                            if !added {
+                                results.push(SearchResult {
+                                    app: app.clone(),
+                                    score: score + calculate_bonus_score(app),
+                                });
+                                seen_names.insert(name_key.clone());
+                                added = true;
+                            }
                         }
                     }
 
-                    if app.keywords.iter().any(|k| k.eq_ignore_ascii_case(&query)) {
+                    if app.keywords.iter().any(|k| k.eq_ignore_ascii_case(&query)) && !added {
                         results.push(SearchResult {
                             app: app.clone(),
                             score: BONUS_SCORE_KEYWORD_MATCH + calculate_bonus_score(app),
                         });
                         seen_names.insert(name_key.clone());
-                        continue;
+                        added = true;
                     }
 
                     if app
                         .categories
                         .iter()
                         .any(|c| c.eq_ignore_ascii_case(&query))
+                        && !added
                     {
                         results.push(SearchResult {
                             app: app.clone(),
                             score: BONUS_SCORE_CATEGORY_MATCH + calculate_bonus_score(app),
                         });
                         seen_names.insert(name_key.clone());
-                        continue;
+                        added = true;
                     }
 
                     if let Some(score) = matcher.fuzzy_match(&name_lower, &query) {
-                        results.push(SearchResult {
-                            app: app.clone(),
-                            score: score + calculate_bonus_score(app),
-                        });
+                        if !added {
+                            results.push(SearchResult {
+                                app: app.clone(),
+                                score: score + calculate_bonus_score(app),
+                            });
+                            seen_names.insert(name_key.clone());
+                            added = true;
+                        }
+                    }
 
-                        for action in &app.actions {
-                            let action_name =
-                                format!("{} - {}", app.name, action.name).to_lowercase();
-                            if let Some(action_score) = matcher.fuzzy_match(&action_name, &query) {
-                                let mut action_app = app.clone();
-                                action_app.name = format!("{} - {}", app.name, action.name);
-                                action_app.exec = action.exec.clone();
-                                if let Some(icon) = &action.icon_name {
-                                    action_app.icon_name = icon.clone();
-                                }
+                    for action in &app.actions {
+                        let mut action_app = app.clone();
+                        action_app.name = format!("{} - {}", app.name, action.name);
+                        action_app.exec = action.exec.clone();
+                        if let Some(icon) = &action.icon_name {
+                            action_app.icon_name = icon.clone();
+                        }
+                        results.push(SearchResult {
+                            app: action_app,
+                            score: calculate_bonus_score(app) - 100,
+                        });
+                    }
+
+                    if !added {
+                        for keyword in &app.keywords {
+                            if let Some(score) =
+                                matcher.fuzzy_match(&keyword.to_lowercase(), &query)
+                            {
                                 results.push(SearchResult {
-                                    app: action_app,
-                                    score: action_score + calculate_bonus_score(app) - 100,
+                                    app: app.clone(),
+                                    score: score + calculate_bonus_score(app),
                                 });
+                                seen_names.insert(name_key.clone());
+                                break;
                             }
                         }
-                        seen_names.insert(name_key.clone());
-                        continue;
-                    }
 
-                    for keyword in &app.keywords {
-                        if let Some(score) = matcher.fuzzy_match(&keyword.to_lowercase(), &query) {
-                            results.push(SearchResult {
-                                app: app.clone(),
-                                score: score + calculate_bonus_score(app),
-                            });
-                            seen_names.insert(name_key.clone());
-                            break;
-                        }
-                    }
-
-                    for category in &app.categories {
-                        if let Some(score) = matcher.fuzzy_match(&category.to_lowercase(), &query) {
-                            results.push(SearchResult {
-                                app: app.clone(),
-                                score: score + calculate_bonus_score(app),
-                            });
-                            seen_names.insert(name_key.clone());
-                            break;
+                        for category in &app.categories {
+                            if let Some(score) =
+                                matcher.fuzzy_match(&category.to_lowercase(), &query)
+                            {
+                                results.push(SearchResult {
+                                    app: app.clone(),
+                                    score: score + calculate_bonus_score(app),
+                                });
+                                seen_names.insert(name_key.clone());
+                                break;
+                            }
                         }
                     }
                 }
@@ -247,7 +242,7 @@ fn check_binary(query: &str) -> Option<SearchResult> {
         return None;
     }
 
-    let bin_path = format!("/usr/bin/{}", parts[0]);
+    let bin_path = format!("usr/bin/{}", parts[0]);
     std::fs::metadata(&bin_path)
         .ok()
         .filter(|metadata| metadata.permissions().mode() & 0o111 != 0)
