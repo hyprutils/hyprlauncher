@@ -14,11 +14,7 @@ use gtk4::{
     STYLE_PROVIDER_PRIORITY_USER,
 };
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
-use std::{
-    cell::RefCell,
-    process::{Command, Stdio},
-    rc::Rc,
-};
+use std::{cell::RefCell, process::Command, rc::Rc};
 use tokio::runtime::Handle;
 
 pub struct LauncherWindow {
