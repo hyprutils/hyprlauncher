@@ -250,44 +250,56 @@ pub struct Dmenu {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(untagged)]
 pub enum SearchEngine {
-    #[serde(rename = "duckduckgo")]
+    Preset(PresetEngine),
+    Custom(String),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum PresetEngine {
     DuckDuckGo,
-    #[serde(rename = "google")]
     Google,
-    #[serde(rename = "bing")]
     Bing,
-    #[serde(rename = "brave")]
     Brave,
-    #[serde(rename = "ecosia")]
     Ecosia,
-    #[serde(rename = "startpage")]
     Startpage,
 }
 
 impl SearchEngine {
     pub fn get_url(&self) -> String {
         match self {
-            SearchEngine::DuckDuckGo => String::from("https://duckduckgo.com/?q="),
-            SearchEngine::Google => String::from("https://www.google.com/search?q="),
-            SearchEngine::Bing => String::from("https://www.bing.com/search?q="),
-            SearchEngine::Brave => String::from("https://search.brave.com/search?q="),
-            SearchEngine::Ecosia => String::from("https://www.ecosia.org/search?q="),
-            SearchEngine::Startpage => String::from("https://www.startpage.com/do/search?q="),
+            SearchEngine::Preset(engine) => match engine {
+                PresetEngine::DuckDuckGo => String::from("https://duckduckgo.com/?q="),
+                PresetEngine::Google => String::from("https://www.google.com/search?q="),
+                PresetEngine::Bing => String::from("https://www.bing.com/search?q="),
+                PresetEngine::Brave => String::from("https://search.brave.com/search?q="),
+                PresetEngine::Ecosia => String::from("https://www.ecosia.org/search?q="),
+                PresetEngine::Startpage => String::from("https://www.startpage.com/do/search?q="),
+            },
+            SearchEngine::Custom(url) => url.clone(),
         }
     }
 }
 
 impl Default for SearchEngine {
     fn default() -> Self {
-        Self::DuckDuckGo
+        Self::Preset(PresetEngine::DuckDuckGo)
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct SearchPrefix {
+    pub prefix: String,
+    pub url: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 pub struct WebSearch {
     pub enabled: bool,
     pub engine: SearchEngine,
+    pub prefixes: Vec<SearchPrefix>,
 }
 
 impl Config {
