@@ -55,7 +55,6 @@ impl App {
         });
 
         let app_clone = app.clone();
-        let mut last_config = Config::load();
         let mut last_update = Instant::now();
 
         glib::timeout_add_local(Duration::from_millis(100), move || {
@@ -69,7 +68,6 @@ impl App {
                         if let Some(launcher_window) = window.downcast_ref::<ApplicationWindow>() {
                             log!("Updating window CSS");
                             LauncherWindow::update_window_config(launcher_window, &new_config);
-                            last_config = new_config;
                             last_update = now;
                         }
                     }
