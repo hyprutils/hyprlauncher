@@ -253,13 +253,13 @@ export TERMINAL=alacritty  # or kitty, foot, etc.
 
 This can be added to your shell's profile (e.g., `.bash_profile`, `.zprofile`).
 
-## Config Merging
-If the configuration file is invalid or missing certain values, Hyprlauncher will:
-1. Use default values for missing fields
-2. Merge existing valid configuration with defaults
-3. Write the merged configuration back to the file
+## Config Validation
+If the configuration file is invalid or missing, Hyprlauncher will:
+1. Log the error for debugging purposes
+2. Fall back to using default values
+3. Create a new configuration file with default values if none exists
 
-The configuration file is strict and requires valid TOML format. Invalid configurations will fall back to defaults.
+The configuration file requires valid TOML format. Invalid configurations will cause the launcher to use default values.
 
 ## Custom Styling
 Hyprlauncher supports two methods of styling:
