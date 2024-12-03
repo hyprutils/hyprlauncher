@@ -280,8 +280,9 @@ This can be added to your shell's profile (e.g., `.bash_profile`, `.zprofile`).
 If the configuration file is invalid or missing, Hyprlauncher will:
 1. Log the error for debugging purposes
 2. Display an error overlay with the error message and suggestion
-3. Fall back to using default values
-4. Create a new configuration file with default values if none exists
+3. Enable ``disable_auto_focus`` temporarily to allow you to fix the error
+4. Fall back to using default values
+5. Create a new configuration file with default values if none exists
 
 The configuration file requires valid TOML format. Invalid configurations will cause the launcher to use default values.
 
