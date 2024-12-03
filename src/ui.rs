@@ -1,5 +1,5 @@
 use crate::{
-    config::{Config, WindowAnchor},
+    config::{Config, ConfigError, WindowAnchor},
     launcher::{self, AppEntry, EntryType, APP_CACHE},
     log,
     search::{self, SearchResult},
@@ -39,8 +39,10 @@ impl LauncherWindow {
             window_start.elapsed().as_secs_f64() * 1000.0
         );
 
-        let search_start = std::time::Instant::now();
         let config = Config::load();
+        let error = Config::get_current_error();
+
+        let search_start = std::time::Instant::now();
         let mut results = rt.block_on(async { search::search_applications("", &config).await });
 
         if results.is_err() {
@@ -257,6 +259,11 @@ impl LauncherWindow {
 
         let app_data_store = Rc::new(RefCell::new(Vec::with_capacity(50)));
         update_results_list(&list_view, results, &app_data_store);
+
+        if let Some(error) = error {
+            let error_overlay = create_error_overlay(&error);
+            main_box.prepend(&error_overlay);
+        }
 
         let launcher = Self {
             window,
@@ -986,4 +993,23 @@ fn delete_word(text: &str, cursor_pos: usize) -> Option<(String, usize)> {
     let new_pos = new_pos.min(trimmed.len());
 
     Some((trimmed, new_pos))
+}
+
+fn create_error_overlay(error: &ConfigError) -> gtk4::Box {
+    let overlay_box = GtkBox::new(Orientation::Vertical, 8);
+    overlay_box.add_css_class("error-overlay");
+
+    let error_label = Label::new(Some(&format!(
+        "Config error at line {}: {}",
+        error.line, error.message
+    )));
+    error_label.add_css_class("error-message");
+
+    let suggestion_label = Label::new(Some(&format!("Suggestion: {}", error.suggestion)));
+    suggestion_label.add_css_class("error-suggestion");
+
+    overlay_box.append(&error_label);
+    overlay_box.append(&suggestion_label);
+
+    overlay_box
 }
