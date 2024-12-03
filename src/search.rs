@@ -84,20 +84,32 @@ pub async fn search_applications(
 
         let mut results = match query.chars().next() {
             None => {
-                let mut results = Vec::with_capacity(max_results);
+                let history = load_history();
+                let mut heatmap_results = Vec::new();
+                let mut alphabetical_results = Vec::new();
+
                 for app in cache.values() {
                     if app.path.ends_with(".desktop") {
-                        results.push(SearchResult {
+                        let result = SearchResult {
                             score: calculate_bonus_score(app),
                             app: app.clone(),
-                        });
+                        };
 
-                        if results.len() >= max_results {
-                            break;
+                        if history.contains_key(&app.name) {
+                            heatmap_results.push(result);
+                        } else {
+                            alphabetical_results.push(result);
                         }
                     }
                 }
-                results.sort_unstable_by_key(|item| -item.score);
+
+                heatmap_results.sort_unstable_by_key(|item| -item.score);
+                alphabetical_results
+                    .sort_by(|a, b| a.app.name.to_lowercase().cmp(&b.app.name.to_lowercase()));
+
+                let mut results = heatmap_results;
+                results.extend(alphabetical_results);
+                results.truncate(max_results);
                 results
             }
             Some(_) => {

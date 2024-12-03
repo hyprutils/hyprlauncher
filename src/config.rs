@@ -1,5 +1,6 @@
 use crate::log;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::{
     env, fs,
@@ -7,7 +8,7 @@ use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc::channel,
-        LazyLock,
+        LazyLock, Mutex,
     },
     thread,
     time::Duration,
@@ -36,6 +37,8 @@ static CONFIG_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
 });
 
 pub static LOGGING_ENABLED: AtomicBool = AtomicBool::new(false);
+
+static CURRENT_CONFIG_ERROR: Lazy<Mutex<Option<ConfigError>>> = Lazy::new(|| Mutex::new(None));
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Corners {
@@ -302,85 +305,77 @@ pub struct WebSearch {
     pub prefixes: Vec<SearchPrefix>,
 }
 
+#[derive(Debug, Clone)]
+pub struct ConfigError {
+    pub line: usize,
+    pub message: String,
+    pub suggestion: String,
+}
+
+impl ConfigError {
+    pub fn new(line: usize, message: &str, suggestion: &str) -> Self {
+        Self {
+            line,
+            message: message.to_string(),
+            suggestion: suggestion.to_string(),
+        }
+    }
+}
+
 impl Config {
     fn config_dir() -> &'static PathBuf {
         &CONFIG_DIR
     }
 
     pub fn load() -> Self {
-        let config_file = Self::config_dir().join("config.json");
+        let config_file = Self::config_dir().join("config.toml");
         log!("Loading configuration from: {:?}", config_file);
-        let default_config = Config::default();
-        LOGGING_ENABLED.store(default_config.debug.enable_logging, Ordering::SeqCst);
 
         if !config_file.exists() {
             log!("Config file not found, creating default configuration");
-            if let Ok(contents) = serde_json::to_string_pretty(&default_config) {
+            let default_config = Config::default();
+            if let Ok(contents) = toml::to_string_pretty(&default_config) {
                 fs::write(&config_file, contents).unwrap_or_default();
             }
+            *CURRENT_CONFIG_ERROR.lock().unwrap() = None;
             return default_config;
         }
 
-        log!("Reading existing configuration");
-        let file_contents = match fs::read_to_string(&config_file) {
-            Ok(contents) => contents,
+        match fs::read_to_string(&config_file) {
+            Ok(contents) => match toml::from_str::<Config>(&contents) {
+                Ok(config) => {
+                    LOGGING_ENABLED.store(config.debug.enable_logging, Ordering::SeqCst);
+                    *CURRENT_CONFIG_ERROR.lock().unwrap() = None;
+                    config
+                }
+                Err(e) => {
+                    let line = e.span().map(|s| s.start).unwrap_or(0);
+                    let suggestion = match e.to_string() {
+                        s if s.contains("invalid type") => {
+                            "Check the type of this value matches what's expected in the config"
+                        }
+                        s if s.contains("missing field") => {
+                            "Add the missing field with an appropriate value"
+                        }
+                        _ => "Verify the syntax follows TOML format",
+                    };
+                    let error = ConfigError::new(line, &e.to_string(), suggestion);
+                    *CURRENT_CONFIG_ERROR.lock().unwrap() = Some(error);
+                    let mut default_config = Config::default();
+                    default_config.debug.disable_auto_focus = true;
+                    default_config
+                }
+            },
             Err(e) => {
                 log!("Error reading config file: {}", e);
-                return default_config;
-            }
-        };
-
-        let existing_config: serde_json::Value = match serde_json::from_str(&file_contents) {
-            Ok(config) => config,
-            Err(e) => {
-                log!(
-                    "Error parsing config JSON: {} at line {}, column {}",
-                    e,
-                    e.line(),
-                    e.column()
-                );
-                log!("Attempting to merge partial configuration");
-                match serde_json::from_str::<serde_json::Value>(&file_contents) {
-                    Ok(partial_config) => partial_config,
-                    Err(_) => {
-                        log!("Unable to parse partial config, using defaults");
-                        return default_config;
-                    }
-                }
-            }
-        };
-
-        let default_json = match serde_json::to_value(&default_config) {
-            Ok(json) => json,
-            Err(e) => {
-                log!("Error converting default config to JSON: {}", e);
-                return default_config;
-            }
-        };
-
-        let merged_config = merge_json(existing_config, default_json.clone(), &default_json);
-
-        if let Ok(pretty_merged) = serde_json::to_string_pretty(&merged_config) {
-            if pretty_merged != file_contents {
-                log!("Writing merged configuration back to file");
-                fs::write(&config_file, pretty_merged).unwrap_or_default();
+                *CURRENT_CONFIG_ERROR.lock().unwrap() = None;
+                Config::default()
             }
         }
+    }
 
-        let config = match serde_json::from_value(merged_config.clone()) {
-            Ok(config) => config,
-            Err(e) => {
-                log!("Error converting merged config to struct: {}", e);
-                log!(
-                    "Merged config was: {}",
-                    serde_json::to_string_pretty(&merged_config).unwrap_or_default()
-                );
-                default_config
-            }
-        };
-
-        LOGGING_ENABLED.store(config.debug.enable_logging, Ordering::SeqCst);
-        config
+    pub fn get_current_error() -> Option<ConfigError> {
+        CURRENT_CONFIG_ERROR.lock().unwrap().clone()
     }
 
     pub fn get_css(&self) -> String {
@@ -478,7 +473,23 @@ impl Config {
                 listview > row:hover:not(:selected) .app-path {{
                     color: mix(@theme_selected_fg_color, @theme_bg_color, 0.6);
                 }}
-                scrollbar {{ opacity: 0; }}",
+                scrollbar {{ opacity: 0; }}
+                .error-overlay {{
+                    background-color: rgba(200, 0, 0, 0.95);
+                    padding: 12px;
+                    margin: 8px;
+                    border-radius: 6px;
+                }}
+                .error-message {{
+                    color: white;
+                    font-weight: bold;
+                    font-size: 14px;
+                }}
+                .error-suggestion {{
+                    color: rgba(255, 255, 255, 0.9);
+                    font-size: 14px;
+                    font-weight: bold;
+                }}",
                 theme.corners.window,
                 border_style,
                 theme.spacing.item_padding,
@@ -560,7 +571,23 @@ impl Config {
                 listview > row:hover:not(:selected) .app-path {{
                     color: {};
                 }}
-                scrollbar {{ opacity: 0; }}",
+                scrollbar {{ opacity: 0; }}
+                .error-overlay {{
+                    background-color: rgba(200, 0, 0, 0.95);
+                    padding: 12px;
+                    margin: 8px;
+                    border-radius: 6px;
+                }}
+                .error-message {{
+                    color: white;
+                    font-weight: bold;
+                    font-size: 14px;
+                }}
+                .error-suggestion {{
+                    color: rgba(255, 255, 255, 0.9);
+                    font-size: 14px;
+                    font-weight: bold;
+                }}",
                 theme.colors.window_bg,
                 theme.corners.window,
                 border_style,
@@ -594,7 +621,7 @@ impl Config {
     }
 
     pub fn watch_changes<F: Fn() + Send + 'static>(callback: F) {
-        let config_path = Self::config_dir().join("config.json");
+        let config_path = Self::config_dir().join("config.toml");
         let css_path = Self::config_dir().join("style.css");
         log!("Setting up config file watcher for: {:?}", config_path);
 
@@ -640,8 +667,25 @@ impl Config {
                             let config_changed = match fs::read_to_string(&config_path) {
                                 Ok(new_content) => {
                                     if last_content.as_ref() != Some(&new_content) {
-                                        last_content = Some(new_content);
-                                        true
+                                        last_content = Some(new_content.clone());
+                                        match toml::from_str::<Config>(&new_content) {
+                                            Ok(_) => {
+                                                *CURRENT_CONFIG_ERROR.lock().unwrap() = None;
+                                                callback();
+                                                true
+                                            }
+                                            Err(e) => {
+                                                let line = e.span().map(|s| s.start).unwrap_or(0);
+                                                let error = ConfigError::new(
+                                                    line,
+                                                    &e.to_string(),
+                                                    "Check your config syntax",
+                                                );
+                                                *CURRENT_CONFIG_ERROR.lock().unwrap() = Some(error);
+                                                callback();
+                                                true
+                                            }
+                                        }
                                     } else {
                                         false
                                     }
@@ -677,68 +721,5 @@ impl Config {
                 }
             }
         });
-    }
-}
-
-fn merge_json(
-    existing: serde_json::Value,
-    default: serde_json::Value,
-    schema: &serde_json::Value,
-) -> serde_json::Value {
-    match (existing, default) {
-        (serde_json::Value::Object(mut existing_obj), serde_json::Value::Object(default_obj)) => {
-            let mut result = serde_json::Map::new();
-
-            let schema_obj = match schema.as_object() {
-                Some(obj) => obj,
-                None => return serde_json::Value::Object(default_obj),
-            };
-
-            const MAX_DEPTH: usize = 10;
-            static CURRENT_DEPTH: std::sync::atomic::AtomicUsize =
-                std::sync::atomic::AtomicUsize::new(0);
-
-            let depth = CURRENT_DEPTH.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            if depth >= MAX_DEPTH {
-                CURRENT_DEPTH.store(0, std::sync::atomic::Ordering::SeqCst);
-                return serde_json::Value::Object(default_obj);
-            }
-
-            for (key, schema_val) in schema_obj {
-                if let Some(existing_val) = existing_obj.remove(key) {
-                    if schema_val.is_object() && existing_val.is_object() {
-                        result.insert(
-                            key.clone(),
-                            merge_json(
-                                existing_val,
-                                default_obj.get(key).cloned().unwrap_or_default(),
-                                schema_val,
-                            ),
-                        );
-                    } else {
-                        let is_valid = match schema_val {
-                            serde_json::Value::Null => existing_val.is_null(),
-                            serde_json::Value::Bool(_) => existing_val.is_boolean(),
-                            serde_json::Value::Number(_) => existing_val.is_number(),
-                            serde_json::Value::String(_) => existing_val.is_string(),
-                            serde_json::Value::Array(_) => existing_val.is_array(),
-                            serde_json::Value::Object(_) => existing_val.is_object(),
-                        };
-
-                        if is_valid {
-                            result.insert(key.clone(), existing_val);
-                        } else if let Some(default_val) = default_obj.get(key) {
-                            result.insert(key.clone(), default_val.clone());
-                        }
-                    }
-                } else if let Some(default_val) = default_obj.get(key) {
-                    result.insert(key.clone(), default_val.clone());
-                }
-            }
-
-            CURRENT_DEPTH.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
-            serde_json::Value::Object(result)
-        }
-        (_, default) => default,
     }
 }

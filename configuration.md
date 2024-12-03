@@ -3,101 +3,92 @@
 > [!WARNING]
 > This documentation represents the latest development version from Git, not the latest release. Some features described here may not be available in the current release version.
 
-Configuration file location: `~/.config/hyprlauncher/config.json`
+Configuration file location: `~/.config/hyprlauncher/config.toml`
 
 ## Configuration file
 
 The configuration file controls the appearance and behavior of the launcher window.
 
-```json
-{
-  "window": {
-    "width": 600,                // Width of the launcher window in pixels
-    "height": 600,               // Height of the launcher window in pixels
-    "anchor": "center",          // Window position: "center", "top", "bottom", "left", "right", "top_left", "top_right", "bottom_left", "bottom_right"
-    "margin_top": 0,             // Margin from the top of the screen in pixels
-    "margin_bottom": 0,          // Margin from the bottom of the screen in pixels
-    "margin_left": 0,            // Margin from the left of the screen in pixels
-    "margin_right": 0,           // Margin from the right of the screen in pixels
-    "show_descriptions": false,  // Show application descriptions in the list
-    "show_paths": false,         // Show application paths in the list
-    "show_icons": true,          // Show application icons in the list
-    "show_search": true,         // Show the search bar
-    "show_actions": false,       // Show additional application actions in the list
-    "custom_navigate_keys": {    // Customize navigation key bindings
-      "up": "k",                 // Key to move selection up
-      "down": "j",               // Key to move selection down
-      "delete_word": "h"         // Key to delete word in search
-    },
-    "show_border": true,         // Show window border
-    "border_width": 2,           // Border width in pixels
-    "use_gtk_colors": false,     // Use GTK theme colors instead of custom colors
-    "use_custom_css": false,     // Use custom CSS file for styling
-    "max_entries": 50            // Maximum number of entries to show in the list
-  },
-  "theme": {
-    "colors": {
-      "border": "#333333",                    // Border color in hex format
-      "window_bg": "#0f0f0f",                 // Window background color
-      "search_bg": "#1f1f1f",                 // Search bar background color
-      "search_bg_focused": "#282828",         // Search bar background color when focused
-      "item_bg": "#0f0f0f",                   // List item background color
-      "item_bg_hover": "#181818",             // List item background color on hover
-      "item_bg_selected": "#1f1f1f",          // List item background color when selected
-      "search_text": "#e0e0e0",               // Search text color
-      "search_caret": "#808080",              // Search cursor color
-      "item_name": "#ffffff",                 // Application name color
-      "item_name_selected": "#ffffff",        // Application name color when selected
-      "item_description": "#a0a0a0",          // Application description color
-      "item_description_selected": "#a0a0a0", // Application description color when selected
-      "item_path": "#808080",                 // Application path color
-      "item_path_selected": "#808080",        // Application path color when selected
-    },
-    "corners": {
-      "window": 12,              // Window corner radius in pixels
-      "search": 8,               // Search bar corner radius in pixels
-      "list_item": 8             // List item corner radius in pixels
-    },
-    "spacing": {
-      "search_margin": 12,       // Search bar outer margin in pixels
-      "search_padding": 12,      // Search bar inner padding in pixels
-      "item_margin": 6,          // List item outer margin in pixels
-      "item_padding": 4          // List item inner padding in pixels
-    },
-    "typography": {
-      "search_font_size": 16,               // Search bar font size in pixels
-      "item_name_size": 14,                 // Application name font size in pixels
-      "item_description_size": 12,          // Application description font size in pixels
-      "item_path_size": 12,                 // Application path font size in pixels
-      "item_path_font_family": "monospace"  // Font family for application paths
-    }
-  },
-  "debug": {
-    "disable_auto_focus": false,  // Disable automatic keyboard focus
-    "enable_logging": false       // Enable application logging
-  },
-  "dmenu": {
-    "allow_invalid": false,      // Allow invalid entries when no matches are found
-    "case_sensitive": false      // Enable case-sensitive matching
-  },
-  "web_search": {
-    "enabled": false,          // Enable/disable web search functionality
-    "engine": "duckduckgo",    // Use preset engine name
-    "prefixes": [              // Custom search prefixes
-      {
-        "prefix": "yt",
-        "url": "https://www.youtube.com/results?search_query="
-      },
-      {
-        "prefix": "gh",
-        "url": "https://github.com/search?q="
-      }
-    ]
-  }
-  modes: {
-    calculator: false // Enable the calculator functionality
-  }
-}
+```toml
+[window]
+width = 600                           # Width of the launcher window in pixels
+height = 600                          # Height of the launcher window in pixels
+anchor = "center"                     # Window position: "center", "top", "bottom", "left", "right", "top_left", "top_right", "bottom_left", "bottom_right"
+margin_top = 0                        # Margin from the top of the screen in pixels
+margin_bottom = 0                     # Margin from the bottom of the screen in pixels
+margin_left = 0                       # Margin from the left of the screen in pixels
+margin_right = 0                      # Margin from the right of the screen in pixels
+show_descriptions = false             # Show application descriptions in the list
+show_paths = false                    # Show application paths in the list
+show_icons = true                     # Show application icons in the list
+show_search = true                    # Show the search bar
+show_actions = false                  # Show additional application actions in the list
+show_border = true                    # Show window border
+border_width = 2                      # Border width in pixels
+use_gtk_colors = false                # Use GTK theme colors instead of custom colors
+use_custom_css = false                # Use custom CSS file for styling
+max_entries = 50                      # Maximum number of entries to show in the list
+
+[window.custom_navigate_keys]
+up = "k"                              # Key to move selection up
+down = "j"                            # Key to move selection down
+delete_word = "h"                     # Key to delete word in search
+
+[theme.colors]
+border = "#333333"                    # Border color in hex format
+window_bg = "#0f0f0f"                 # Window background color
+search_bg = "#1f1f1f"                 # Search bar background color
+search_bg_focused = "#282828"         # Search bar background color when focused
+item_bg = "#0f0f0f"                   # List item background color
+item_bg_hover = "#181818"             # List item background color on hover
+item_bg_selected = "#1f1f1f"          # List item background color when selected
+search_text = "#e0e0e0"               # Search text color
+search_caret = "#808080"              # Search cursor color
+item_name = "#ffffff"                 # Application name color
+item_name_selected = "#ffffff"        # Application name color when selected
+item_description = "#a0a0a0"          # Application description color
+item_description_selected = "#a0a0a0" # Application description color when selected
+item_path = "#808080"                 # Application path color
+item_path_selected = "#808080"        # Application path color when selected
+
+[theme.corners]
+window = 12                           # Window corner radius in pixels
+search = 8                            # Search bar corner radius in pixels
+list_item = 8                         # List item corner radius in pixels
+
+[theme.spacing]
+search_margin = 12                    # Search bar outer margin in pixels
+search_padding = 12                   # Search bar inner padding in pixels
+item_margin = 6                       # List item outer margin in pixels
+item_padding = 4                      # List item inner padding in pixels
+
+[theme.typography]
+search_font_size = 16                 # Search bar font size in pixels
+item_name_size = 14                   # Application name font size in pixels
+item_description_size = 12            # Application description font size in pixels
+item_path_size = 12                   # Application path font size in pixels
+item_path_font_family = "monospace"   # Font family for application paths
+
+[debug]
+disable_auto_focus = false            # Disable automatic keyboard focus
+enable_logging = false                # Enable application logging
+
+[dmenu]
+allow_invalid = false                 # Allow invalid entries when no matches are found
+case_sensitive = false                # Enable case-sensitive matching
+
+[web_search]
+enabled = false                       # Enable/disable web search functionality
+engine = "duckduckgo"                 # Use preset engine name
+prefixes = []                         # Disables all custom search prefixes
+
+[[web_search.prefixes]]
+prefix = "yt"
+url = "https://www.youtube.com/results?search_query="
+
+[[web_search.prefixes]]
+prefix = "gh"
+url = "https://github.com/search?q="
 ```
 
 ## Features
@@ -123,12 +114,9 @@ Desktop entries can define additional actions that appear as separate entries wh
 - Custom application-specific commands
 
 To enable actions, set `show_actions` to `true` in your config:
-```json
-{
-  "window": {
-    "show_actions": true
-  }
-}
+```toml
+[window]
+show_actions = true
 ```
 
 Actions will appear as separate entries with the format "Application Name - Action Name".
@@ -153,7 +141,7 @@ Navigation can be customized using the `custom_navigate_keys` setting:
 
 ### Context-Aware Search
 - Applications are ranked based on usage patterns and launch frequency
-- Launch history is stored in `~/.local/share/hyprlauncher/heatmap.json`
+- Launch history is stored in `~/.local/share/hyprlauncher/heatmap.toml`
 - Ranking factors include:
   - Launch count: More frequently launched applications rank higher
   - Last used: Recently used applications get a ranking boost
@@ -180,7 +168,30 @@ The heatmap data is automatically maintained and requires no manual configuratio
 - Corner radius customization for window, search bar, and list items
 - Option to use GTK theme colors with `use_gtk_colors`
 - Show/hide application icons, descriptions, and paths
-- theme customization including colors, spacing, and typography
+- Theme customization including colors, spacing, and typography
+
+When using custom CSS (style.css), you can also customize the error overlay appearance:
+
+```css
+.error-overlay {
+    background-color: rgba(200, 0, 0, 0.95);
+    padding: 12px;
+    margin: 8px;
+    border-radius: 6px;
+}
+
+.error-message {
+    color: white;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.error-suggestion {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 14px;
+    font-weight: bold;
+}
+```
 
 ### Debug Options
 
@@ -202,23 +213,19 @@ The heatmap data is automatically maintained and requires no manual configuratio
 ### Web Search
 - Enables web search functionality when no matching applications are found
 - Configuration options in the `web_search` section:
-  ```json
-  {
-    "web_search": {
-      "enabled": false,          // Enable/disable web search functionality
-      "engine": "duckduckgo",    // Use preset engine name
-      "prefixes": [              // Custom search prefixes
-        {
-          "prefix": "yt",
-          "url": "https://www.youtube.com/results?search_query="
-        },
-        {
-          "prefix": "gh",
-          "url": "https://github.com/search?q="
-        }
-      ]
-    }
-  }
+  ```toml
+  [web_search]
+  enabled = false            # Enable web search
+  engine = "duckduckgo"      # Use preset engine name
+  prefixes = []              # Disables all custom search prefixes
+
+  [[web_search.prefixes]]
+  prefix = "yt"
+  url = "https://www.youtube.com/results?search_query="
+
+  [[web_search.prefixes]]
+  prefix = "gh"
+  url = "https://github.com/search?q="
   ```
 - Available preset engines:
   - `duckduckgo` (default)
@@ -237,19 +244,31 @@ The heatmap data is automatically maintained and requires no manual configuratio
   - Example: `gh:rust-lang` searches GitHub
   - Prefixes are defined in the config file
 
+- Setting `prefixes = []` will:
+  - Disable all custom search prefixes
+  - Keep the default search engine functionality
+  - Prevent the use of prefix-based searches (like `yt:` or `gh:`)
+
+Example configuration with no prefixes:
+```toml
+[web_search]
+enabled = true
+engine = "duckduckgo"
+prefixes = []  # Disables all custom search prefixes
+```
+
+This configuration will only allow searching with the default search engine (DuckDuckGo) and disable any custom prefix-based searches.
+
 ## Hot Reloading
 
 The configuration file is watched for changes and will automatically reload when modified. No need to restart the application.
 
 > [!NOTE]
 > To interact and see your live config changes while the launcher is open, set `disable_auto_focus` to `true` in your config:
->
-> ```json
-> {
->   "debug": {
->     "disable_auto_focus": true
->   }
-> }
+
+> ```toml
+> [debug]
+> disable_auto_focus = true
 > ```
 
 > This allows you to edit the config file while the launcher window is open. Otherwise, the launcher's exclusive keyboard focus will prevent text editing in other windows.
@@ -275,38 +294,35 @@ export TERMINAL=alacritty  # or kitty, foot, etc.
 
 This can be added to your shell's profile (e.g., `.bash_profile`, `.zprofile`).
 
-## Config Merging
+## Config Validation
+If the configuration file is invalid or missing, Hyprlauncher will:
+1. Log the error for debugging purposes
+2. Display an error overlay with the error message and suggestion
+3. Enable ``disable_auto_focus`` temporarily to allow you to fix the error
+4. Fall back to using default values
+5. Create a new configuration file with default values if none exists
 
-If the configuration file is invalid or missing certain values, Hyprlauncher will:
-
-1. Use default values for missing fields
-2. Merge existing valid configuration with defaults
-3. Write the merged configuration back to the file
-
-The configuration file is strict and requires valid JSON format. Invalid configurations will fall back to defaults.
+The configuration file requires valid TOML format. Invalid configurations will cause the launcher to use default values.
 
 ## Custom Styling
 Hyprlauncher supports two methods of styling:
 
 1. Built-in Theme Configuration (Default)
-- Uses the theme settings from config.json
+- Uses the theme settings from config.toml
 - Provides a simple way to customize colors, spacing, and typography
 - Recommended for basic customization needs
 
 2. Custom CSS
 - Enables full control over the application's appearance
-- Activated by setting `use_custom_css: true` in config.json
+- Activated by setting `use_custom_css` to `true` in config.toml
 - CSS file location: `~/.config/hyprlauncher/style.css`
 
 To use custom CSS:
 
-1. Enable custom CSS in your config.json:
-```json
-{
-  "window": {
-    "use_custom_css": true
-  }
-}
+1. Enable custom CSS in your config.toml:
+```toml
+[window]
+use_custom_css = true
 ```
 
 2. Create a style.css file in your Hyprlauncher config directory:
@@ -365,6 +381,25 @@ entry {
     font-size: 12px;
     font-family: monospace;
 }
+
+.error-overlay {
+    background-color: rgba(200, 0, 0, 0.95);
+    padding: 12px;
+    margin: 8px;
+    border-radius: 6px;
+}
+
+.error-message {
+    color: white;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.error-suggestion {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 14px;
+    font-weight: bold;
+}
 ```
 
 Available CSS Classes:
@@ -390,4 +425,4 @@ All standard GTK4 CSS properties are supported. Common properties include:
 - `opacity`
 - `box-shadow`
 
-When `use_custom_css` is enabled, all theme settings from config.json are ignored in favor of your custom CSS rules.
+When `use_custom_css` is enabled, all theme settings from config.toml are ignored in favor of your custom CSS rules.
