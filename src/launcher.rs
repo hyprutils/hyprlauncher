@@ -42,7 +42,7 @@ pub enum EntryType {
     Application,
 }
 
-static HEATMAP_PATH: &str = "~/.local/share/hyprlauncher/heatmap.json";
+static HEATMAP_PATH: &str = "~/.local/share/hyprlauncher/heatmap.toml";
 
 static DESKTOP_PATHS: &[&str] = &[
     "/usr/share/applications",
@@ -78,14 +78,8 @@ pub fn increment_launch_count(app: &AppEntry) -> Result<u32, std::io::Error> {
     Ok(count)
 }
 
-#[inline]
-fn save_heatmap(name: &str, count: u32) -> Result<(), std::io::Error> {
+pub fn update_heatmap(name: &str, count: u32) -> Result<(), std::io::Error> {
     let path = shellexpand::tilde(HEATMAP_PATH).to_string();
-
-    if let Some(dir) = std::path::Path::new(&path).parent() {
-        let _ = std::fs::create_dir_all(dir);
-    }
-
     let mut heatmap: HashMap<String, HeatmapEntry> = load_heatmap()?;
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -100,7 +94,7 @@ fn save_heatmap(name: &str, count: u32) -> Result<(), std::io::Error> {
         },
     );
 
-    if let Ok(contents) = serde_json::to_string(&heatmap) {
+    if let Ok(contents) = toml::to_string(&heatmap) {
         let _ = fs::write(path, contents);
     }
 
@@ -111,7 +105,7 @@ pub fn load_heatmap() -> Result<HashMap<String, HeatmapEntry>, std::io::Error> {
     let path = shellexpand::tilde(HEATMAP_PATH).to_string();
     Ok(fs::read_to_string(path)
         .ok()
-        .and_then(|contents| serde_json::from_str(&contents).ok())
+        .and_then(|contents| toml::from_str(&contents).ok())
         .unwrap_or_else(|| HashMap::with_capacity(100)))
 }
 
@@ -295,4 +289,8 @@ fn parse_desktop_entry(path: &std::path::Path) -> Option<AppEntry> {
         terminal,
         actions,
     })
+}
+
+pub fn save_heatmap(name: &str, count: u32) -> Result<(), std::io::Error> {
+    update_heatmap(name, count)
 }

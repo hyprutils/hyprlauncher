@@ -302,14 +302,14 @@ impl Config {
     }
 
     pub fn load() -> Self {
-        let config_file = Self::config_dir().join("config.json");
+        let config_file = Self::config_dir().join("config.toml");
         log!("Loading configuration from: {:?}", config_file);
         let default_config = Config::default();
         LOGGING_ENABLED.store(default_config.debug.enable_logging, Ordering::SeqCst);
 
         if !config_file.exists() {
             log!("Config file not found, creating default configuration");
-            if let Ok(contents) = serde_json::to_string_pretty(&default_config) {
+            if let Ok(contents) = toml::to_string_pretty(&default_config) {
                 fs::write(&config_file, contents).unwrap_or_default();
             }
             return default_config;
@@ -324,57 +324,19 @@ impl Config {
             }
         };
 
-        let existing_config: serde_json::Value = match serde_json::from_str(&file_contents) {
-            Ok(config) => config,
+        match toml::from_str::<Config>(&file_contents) {
+            Ok(config) => {
+                LOGGING_ENABLED.store(config.debug.enable_logging, Ordering::SeqCst);
+                config
+            }
             Err(e) => {
-                log!(
-                    "Error parsing config JSON: {} at line {}, column {}",
-                    e,
-                    e.line(),
-                    e.column()
-                );
-                log!("Attempting to merge partial configuration");
-                match serde_json::from_str::<serde_json::Value>(&file_contents) {
-                    Ok(partial_config) => partial_config,
-                    Err(_) => {
-                        log!("Unable to parse partial config, using defaults");
-                        return default_config;
-                    }
+                log!("Error parsing config TOML: {}", e);
+                if let Ok(contents) = toml::to_string_pretty(&default_config) {
+                    fs::write(&config_file, contents).unwrap_or_default();
                 }
-            }
-        };
-
-        let default_json = match serde_json::to_value(&default_config) {
-            Ok(json) => json,
-            Err(e) => {
-                log!("Error converting default config to JSON: {}", e);
-                return default_config;
-            }
-        };
-
-        let merged_config = merge_json(existing_config, default_json.clone(), &default_json);
-
-        if let Ok(pretty_merged) = serde_json::to_string_pretty(&merged_config) {
-            if pretty_merged != file_contents {
-                log!("Writing merged configuration back to file");
-                fs::write(&config_file, pretty_merged).unwrap_or_default();
-            }
-        }
-
-        let config = match serde_json::from_value(merged_config.clone()) {
-            Ok(config) => config,
-            Err(e) => {
-                log!("Error converting merged config to struct: {}", e);
-                log!(
-                    "Merged config was: {}",
-                    serde_json::to_string_pretty(&merged_config).unwrap_or_default()
-                );
                 default_config
             }
-        };
-
-        LOGGING_ENABLED.store(config.debug.enable_logging, Ordering::SeqCst);
-        config
+        }
     }
 
     pub fn get_css(&self) -> String {
@@ -588,7 +550,7 @@ impl Config {
     }
 
     pub fn watch_changes<F: Fn() + Send + 'static>(callback: F) {
-        let config_path = Self::config_dir().join("config.json");
+        let config_path = Self::config_dir().join("config.toml");
         let css_path = Self::config_dir().join("style.css");
         log!("Setting up config file watcher for: {:?}", config_path);
 
@@ -671,68 +633,5 @@ impl Config {
                 }
             }
         });
-    }
-}
-
-fn merge_json(
-    existing: serde_json::Value,
-    default: serde_json::Value,
-    schema: &serde_json::Value,
-) -> serde_json::Value {
-    match (existing, default) {
-        (serde_json::Value::Object(mut existing_obj), serde_json::Value::Object(default_obj)) => {
-            let mut result = serde_json::Map::new();
-
-            let schema_obj = match schema.as_object() {
-                Some(obj) => obj,
-                None => return serde_json::Value::Object(default_obj),
-            };
-
-            const MAX_DEPTH: usize = 10;
-            static CURRENT_DEPTH: std::sync::atomic::AtomicUsize =
-                std::sync::atomic::AtomicUsize::new(0);
-
-            let depth = CURRENT_DEPTH.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            if depth >= MAX_DEPTH {
-                CURRENT_DEPTH.store(0, std::sync::atomic::Ordering::SeqCst);
-                return serde_json::Value::Object(default_obj);
-            }
-
-            for (key, schema_val) in schema_obj {
-                if let Some(existing_val) = existing_obj.remove(key) {
-                    if schema_val.is_object() && existing_val.is_object() {
-                        result.insert(
-                            key.clone(),
-                            merge_json(
-                                existing_val,
-                                default_obj.get(key).cloned().unwrap_or_default(),
-                                schema_val,
-                            ),
-                        );
-                    } else {
-                        let is_valid = match schema_val {
-                            serde_json::Value::Null => existing_val.is_null(),
-                            serde_json::Value::Bool(_) => existing_val.is_boolean(),
-                            serde_json::Value::Number(_) => existing_val.is_number(),
-                            serde_json::Value::String(_) => existing_val.is_string(),
-                            serde_json::Value::Array(_) => existing_val.is_array(),
-                            serde_json::Value::Object(_) => existing_val.is_object(),
-                        };
-
-                        if is_valid {
-                            result.insert(key.clone(), existing_val);
-                        } else if let Some(default_val) = default_obj.get(key) {
-                            result.insert(key.clone(), default_val.clone());
-                        }
-                    }
-                } else if let Some(default_val) = default_obj.get(key) {
-                    result.insert(key.clone(), default_val.clone());
-                }
-            }
-
-            CURRENT_DEPTH.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
-            serde_json::Value::Object(result)
-        }
-        (_, default) => default,
     }
 }
