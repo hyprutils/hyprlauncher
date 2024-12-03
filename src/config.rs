@@ -304,11 +304,10 @@ impl Config {
     pub fn load() -> Self {
         let config_file = Self::config_dir().join("config.toml");
         log!("Loading configuration from: {:?}", config_file);
-        let default_config = Config::default();
-        LOGGING_ENABLED.store(default_config.debug.enable_logging, Ordering::SeqCst);
 
         if !config_file.exists() {
             log!("Config file not found, creating default configuration");
+            let default_config = Config::default();
             if let Ok(contents) = toml::to_string_pretty(&default_config) {
                 fs::write(&config_file, contents).unwrap_or_default();
             }
@@ -316,25 +315,20 @@ impl Config {
         }
 
         log!("Reading existing configuration");
-        let file_contents = match fs::read_to_string(&config_file) {
-            Ok(contents) => contents,
+        match fs::read_to_string(&config_file) {
+            Ok(contents) => match toml::from_str::<Config>(&contents) {
+                Ok(config) => {
+                    LOGGING_ENABLED.store(config.debug.enable_logging, Ordering::SeqCst);
+                    config
+                }
+                Err(e) => {
+                    log!("Error parsing config TOML: {}", e);
+                    Config::default()
+                }
+            },
             Err(e) => {
                 log!("Error reading config file: {}", e);
-                return default_config;
-            }
-        };
-
-        match toml::from_str::<Config>(&file_contents) {
-            Ok(config) => {
-                LOGGING_ENABLED.store(config.debug.enable_logging, Ordering::SeqCst);
-                config
-            }
-            Err(e) => {
-                log!("Error parsing config TOML: {}", e);
-                if let Ok(contents) = toml::to_string_pretty(&default_config) {
-                    fs::write(&config_file, contents).unwrap_or_default();
-                }
-                default_config
+                Config::default()
             }
         }
     }
