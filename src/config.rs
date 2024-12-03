@@ -1,5 +1,6 @@
 use crate::log;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::{
     env, fs,
@@ -7,7 +8,7 @@ use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc::channel,
-        LazyLock,
+        LazyLock, Mutex,
     },
     thread,
     time::Duration,
@@ -36,6 +37,8 @@ static CONFIG_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
 });
 
 pub static LOGGING_ENABLED: AtomicBool = AtomicBool::new(false);
+
+static CURRENT_CONFIG_ERROR: Lazy<Mutex<Option<ConfigError>>> = Lazy::new(|| Mutex::new(None));
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Corners {
@@ -296,6 +299,23 @@ pub struct WebSearch {
     pub prefixes: Vec<SearchPrefix>,
 }
 
+#[derive(Debug, Clone)]
+pub struct ConfigError {
+    pub line: usize,
+    pub message: String,
+    pub suggestion: String,
+}
+
+impl ConfigError {
+    pub fn new(line: usize, message: &str, suggestion: &str) -> Self {
+        Self {
+            line,
+            message: message.to_string(),
+            suggestion: suggestion.to_string(),
+        }
+    }
+}
+
 impl Config {
     fn config_dir() -> &'static PathBuf {
         &CONFIG_DIR
@@ -304,39 +324,52 @@ impl Config {
     pub fn load() -> Self {
         let config_file = Self::config_dir().join("config.toml");
         log!("Loading configuration from: {:?}", config_file);
-        let default_config = Config::default();
-        LOGGING_ENABLED.store(default_config.debug.enable_logging, Ordering::SeqCst);
 
         if !config_file.exists() {
             log!("Config file not found, creating default configuration");
+            let default_config = Config::default();
             if let Ok(contents) = toml::to_string_pretty(&default_config) {
                 fs::write(&config_file, contents).unwrap_or_default();
             }
+            *CURRENT_CONFIG_ERROR.lock().unwrap() = None;
             return default_config;
         }
 
-        log!("Reading existing configuration");
-        let file_contents = match fs::read_to_string(&config_file) {
-            Ok(contents) => contents,
+        match fs::read_to_string(&config_file) {
+            Ok(contents) => match toml::from_str::<Config>(&contents) {
+                Ok(config) => {
+                    LOGGING_ENABLED.store(config.debug.enable_logging, Ordering::SeqCst);
+                    *CURRENT_CONFIG_ERROR.lock().unwrap() = None;
+                    config
+                }
+                Err(e) => {
+                    let line = e.span().map(|s| s.start).unwrap_or(0);
+                    let suggestion = match e.to_string() {
+                        s if s.contains("invalid type") => {
+                            "Check the type of this value matches what's expected in the config"
+                        }
+                        s if s.contains("missing field") => {
+                            "Add the missing field with an appropriate value"
+                        }
+                        _ => "Verify the syntax follows TOML format",
+                    };
+                    let error = ConfigError::new(line, &e.to_string(), suggestion);
+                    *CURRENT_CONFIG_ERROR.lock().unwrap() = Some(error);
+                    let mut default_config = Config::default();
+                    default_config.debug.disable_auto_focus = true;
+                    default_config
+                }
+            },
             Err(e) => {
                 log!("Error reading config file: {}", e);
-                return default_config;
-            }
-        };
-
-        match toml::from_str::<Config>(&file_contents) {
-            Ok(config) => {
-                LOGGING_ENABLED.store(config.debug.enable_logging, Ordering::SeqCst);
-                config
-            }
-            Err(e) => {
-                log!("Error parsing config TOML: {}", e);
-                if let Ok(contents) = toml::to_string_pretty(&default_config) {
-                    fs::write(&config_file, contents).unwrap_or_default();
-                }
-                default_config
+                *CURRENT_CONFIG_ERROR.lock().unwrap() = None;
+                Config::default()
             }
         }
+    }
+
+    pub fn get_current_error() -> Option<ConfigError> {
+        CURRENT_CONFIG_ERROR.lock().unwrap().clone()
     }
 
     pub fn get_css(&self) -> String {
@@ -434,7 +467,23 @@ impl Config {
                 listview > row:hover:not(:selected) .app-path {{
                     color: mix(@theme_selected_fg_color, @theme_bg_color, 0.6);
                 }}
-                scrollbar {{ opacity: 0; }}",
+                scrollbar {{ opacity: 0; }}
+                .error-overlay {{
+                    background-color: rgba(200, 0, 0, 0.95);
+                    padding: 12px;
+                    margin: 8px;
+                    border-radius: 6px;
+                }}
+                .error-message {{
+                    color: white;
+                    font-weight: bold;
+                    font-size: 14px;
+                }}
+                .error-suggestion {{
+                    color: rgba(255, 255, 255, 0.9);
+                    font-size: 14px;
+                    font-weight: bold;
+                }}",
                 theme.corners.window,
                 border_style,
                 theme.spacing.item_padding,
@@ -516,7 +565,23 @@ impl Config {
                 listview > row:hover:not(:selected) .app-path {{
                     color: {};
                 }}
-                scrollbar {{ opacity: 0; }}",
+                scrollbar {{ opacity: 0; }}
+                .error-overlay {{
+                    background-color: rgba(200, 0, 0, 0.95);
+                    padding: 12px;
+                    margin: 8px;
+                    border-radius: 6px;
+                }}
+                .error-message {{
+                    color: white;
+                    font-weight: bold;
+                    font-size: 14px;
+                }}
+                .error-suggestion {{
+                    color: rgba(255, 255, 255, 0.9);
+                    font-size: 14px;
+                    font-weight: bold;
+                }}",
                 theme.colors.window_bg,
                 theme.corners.window,
                 border_style,
@@ -596,8 +661,25 @@ impl Config {
                             let config_changed = match fs::read_to_string(&config_path) {
                                 Ok(new_content) => {
                                     if last_content.as_ref() != Some(&new_content) {
-                                        last_content = Some(new_content);
-                                        true
+                                        last_content = Some(new_content.clone());
+                                        match toml::from_str::<Config>(&new_content) {
+                                            Ok(_) => {
+                                                *CURRENT_CONFIG_ERROR.lock().unwrap() = None;
+                                                callback();
+                                                true
+                                            }
+                                            Err(e) => {
+                                                let line = e.span().map(|s| s.start).unwrap_or(0);
+                                                let error = ConfigError::new(
+                                                    line,
+                                                    &e.to_string(),
+                                                    "Check your config syntax",
+                                                );
+                                                *CURRENT_CONFIG_ERROR.lock().unwrap() = Some(error);
+                                                callback();
+                                                true
+                                            }
+                                        }
                                     } else {
                                         false
                                     }

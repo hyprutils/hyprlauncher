@@ -1,4 +1,8 @@
-use crate::{config::Config, log, ui::LauncherWindow};
+use crate::{
+    config::Config,
+    log,
+    ui::{create_error_overlay, LauncherWindow},
+};
 use gtk4::{
     glib::{self, ControlFlow},
     prelude::*,
@@ -62,15 +66,37 @@ impl App {
                 let now = Instant::now();
                 if now.duration_since(last_update).as_millis() > 250 {
                     if let Some(window) = app_clone.windows().first() {
-                        log!("Loading new config for comparison");
-                        let new_config = Config::load();
+                        if let Some(window) = window.downcast_ref::<ApplicationWindow>() {
+                            let new_config = Config::load();
+                            let error = Config::get_current_error();
 
-                        if let Some(launcher_window) = window.downcast_ref::<ApplicationWindow>() {
-                            log!("Updating window CSS");
-                            LauncherWindow::update_window_config(launcher_window, &new_config);
-                            last_update = now;
+                            if let Some(main_box) = window.first_child() {
+                                if let Some(main_box) = main_box.downcast_ref::<gtk4::Box>() {
+                                    if let Some(first_child) = main_box.first_child() {
+                                        if first_child
+                                            .css_classes()
+                                            .iter()
+                                            .any(|class| class == "error-overlay")
+                                        {
+                                            main_box.remove(&first_child);
+                                        }
+                                    }
+                                }
+                            }
+
+                            if let Some(error) = error {
+                                if let Some(main_box) = window.first_child() {
+                                    if let Some(main_box) = main_box.downcast_ref::<gtk4::Box>() {
+                                        let error_overlay = create_error_overlay(&error);
+                                        main_box.prepend(&error_overlay);
+                                    }
+                                }
+                            }
+
+                            LauncherWindow::update_window_config(window, &new_config);
                         }
                     }
+                    last_update = now;
                 }
             }
             ControlFlow::Continue

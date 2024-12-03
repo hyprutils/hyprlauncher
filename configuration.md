@@ -160,7 +160,30 @@ The heatmap data is automatically maintained and requires no manual configuratio
 - Corner radius customization for window, search bar, and list items
 - Option to use GTK theme colors with `use_gtk_colors`
 - Show/hide application icons, descriptions, and paths
-- theme customization including colors, spacing, and typography
+- Theme customization including colors, spacing, and typography
+
+When using custom CSS (style.css), you can also customize the error overlay appearance:
+
+```css
+.error-overlay {
+    background-color: rgba(200, 0, 0, 0.95);
+    padding: 12px;
+    margin: 8px;
+    border-radius: 6px;
+}
+
+.error-message {
+    color: white;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.error-suggestion {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 14px;
+    font-weight: bold;
+}
+```
 
 ### Debug Options
 - `disable_auto_focus`: Prevents the window from automatically holding all input
@@ -253,13 +276,15 @@ export TERMINAL=alacritty  # or kitty, foot, etc.
 
 This can be added to your shell's profile (e.g., `.bash_profile`, `.zprofile`).
 
-## Config Merging
-If the configuration file is invalid or missing certain values, Hyprlauncher will:
-1. Use default values for missing fields
-2. Merge existing valid configuration with defaults
-3. Write the merged configuration back to the file
+## Config Validation
+If the configuration file is invalid or missing, Hyprlauncher will:
+1. Log the error for debugging purposes
+2. Display an error overlay with the error message and suggestion
+3. Enable ``disable_auto_focus`` temporarily to allow you to fix the error
+4. Fall back to using default values
+5. Create a new configuration file with default values if none exists
 
-The configuration file is strict and requires valid TOML format. Invalid configurations will fall back to defaults.
+The configuration file requires valid TOML format. Invalid configurations will cause the launcher to use default values.
 
 ## Custom Styling
 Hyprlauncher supports two methods of styling:
@@ -337,6 +362,25 @@ entry {
     color: #414868;
     font-size: 12px;
     font-family: monospace;
+}
+
+.error-overlay {
+    background-color: rgba(200, 0, 0, 0.95);
+    padding: 12px;
+    margin: 8px;
+    border-radius: 6px;
+}
+
+.error-message {
+    color: white;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.error-suggestion {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 14px;
+    font-weight: bold;
 }
 ```
 
