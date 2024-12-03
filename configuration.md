@@ -160,7 +160,30 @@ The heatmap data is automatically maintained and requires no manual configuratio
 - Corner radius customization for window, search bar, and list items
 - Option to use GTK theme colors with `use_gtk_colors`
 - Show/hide application icons, descriptions, and paths
-- theme customization including colors, spacing, and typography
+- Theme customization including colors, spacing, and typography
+
+When using custom CSS (style.css), you can also customize the error overlay appearance:
+
+```css
+.error-overlay {
+    background-color: rgba(200, 0, 0, 0.95);
+    padding: 12px;
+    margin: 8px;
+    border-radius: 6px;
+}
+
+.error-message {
+    color: white;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.error-suggestion {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 14px;
+    font-weight: bold;
+}
+```
 
 ### Debug Options
 - `disable_auto_focus`: Prevents the window from automatically holding all input
@@ -338,6 +361,25 @@ entry {
     color: #414868;
     font-size: 12px;
     font-family: monospace;
+}
+
+.error-overlay {
+    background-color: rgba(200, 0, 0, 0.95);
+    padding: 12px;
+    margin: 8px;
+    border-radius: 6px;
+}
+
+.error-message {
+    color: white;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.error-suggestion {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 14px;
+    font-weight: bold;
 }
 ```
 
