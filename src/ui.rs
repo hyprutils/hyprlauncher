@@ -995,7 +995,7 @@ fn delete_word(text: &str, cursor_pos: usize) -> Option<(String, usize)> {
     Some((trimmed, new_pos))
 }
 
-fn create_error_overlay(error: &ConfigError) -> gtk4::Box {
+pub fn create_error_overlay(error: &ConfigError) -> gtk4::Box {
     let overlay_box = GtkBox::new(Orientation::Vertical, 8);
     overlay_box.add_css_class("error-overlay");
 
