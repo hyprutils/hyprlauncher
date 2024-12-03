@@ -180,6 +180,7 @@ The heatmap data is automatically maintained and requires no manual configuratio
   [web_search]
   enabled = false          # Enable/disable web search functionality
   engine = "duckduckgo"    # Use preset engine name
+
   [[web_search.prefixes]]
   prefix = "yt"
   url = "https://www.youtube.com/results?search_query="
