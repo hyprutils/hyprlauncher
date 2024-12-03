@@ -79,6 +79,7 @@ case_sensitive = false                # Enable case-sensitive matching
 [web_search]
 enabled = false                       # Enable/disable web search functionality
 engine = "duckduckgo"                 # Use preset engine name
+prefixes = []                         # Disables all custom search prefixes
 
 [[web_search.prefixes]]
 prefix = "yt"
@@ -178,8 +179,9 @@ The heatmap data is automatically maintained and requires no manual configuratio
 - Configuration options in the `web_search` section:
   ```toml
   [web_search]
-  enabled = false          # Enable/disable web search functionality
-  engine = "duckduckgo"    # Use preset engine name
+  enabled = false            # Enable web search
+  engine = "duckduckgo"      # Use preset engine name
+  prefixes = []              # Disables all custom search prefixes
 
   [[web_search.prefixes]]
   prefix = "yt"
@@ -205,6 +207,21 @@ The heatmap data is automatically maintained and requires no manual configuratio
   - Example: `yt:how to code` searches YouTube
   - Example: `gh:rust-lang` searches GitHub
   - Prefixes are defined in the config file
+
+- Setting `prefixes = []` will:
+  - Disable all custom search prefixes
+  - Keep the default search engine functionality
+  - Prevent the use of prefix-based searches (like `yt:` or `gh:`)
+
+Example configuration with no prefixes:
+```toml
+[web_search]
+enabled = true
+engine = "duckduckgo"
+prefixes = []  # Disables all custom search prefixes
+```
+
+This configuration will only allow searching with the default search engine (DuckDuckGo) and disable any custom prefix-based searches.
 
 ## Hot Reloading
 The configuration file is watched for changes and will automatically reload when modified. No need to restart the application.
