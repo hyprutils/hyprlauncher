@@ -478,7 +478,7 @@ fn create_calc_entry(query: &str) -> SearchResult {
             description: String::from("Copy to clipboard"),
             path: String::new(),
             exec: format!("wl-copy -t text/plain \"{}\"", res),
-            icon_name: String::from("calculator"),
+            icon_name: String::from("accessories-calculator"),
             launch_count: 0,
             last_used: Some(now),
             entry_type: EntryType::Application,

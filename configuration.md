@@ -201,9 +201,10 @@ When using custom CSS (style.css), you can also customize the error overlay appe
 - `disable_auto_focus`: Prevents the window from automatically holding all input
 - `enable_logging`: Enables logging to the terminal window Hyprlauncher was launched from
 
-### Modes
-
-- calculator: Do calculations when starting your search with '='
+### Calculator Mode
+- Enables calculator functionality when starting your search with digits
+- Can also do more complex calculatios with diffrent units
+- For example `10 m/s to km/h`
 
 ### Dmenu Mode
 - Alternative mode that mimics dmenu functionality
