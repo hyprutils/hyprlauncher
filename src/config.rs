@@ -336,30 +336,62 @@ impl Config {
         }
 
         match fs::read_to_string(&config_file) {
-            Ok(contents) => match toml::from_str::<Config>(&contents) {
-                Ok(config) => {
-                    LOGGING_ENABLED.store(config.debug.enable_logging, Ordering::SeqCst);
-                    *CURRENT_CONFIG_ERROR.lock().unwrap() = None;
-                    config
+            Ok(contents) => {
+                let required_categories = ["window", "theme", "debug", "dmenu", "web_search"];
+                let doc = match contents.parse::<toml::Table>() {
+                    Ok(doc) => doc,
+                    Err(_) => {
+                        let error = ConfigError::new(
+                            1,
+                            "Failed to parse config file",
+                            "Verify the TOML syntax is correct",
+                        );
+                        *CURRENT_CONFIG_ERROR.lock().unwrap() = Some(error);
+                        let mut default_config = Config::default();
+                        default_config.debug.disable_auto_focus = true;
+                        return default_config;
+                    }
+                };
+
+                for category in required_categories {
+                    if !doc.contains_key(category) {
+                        let error = ConfigError::new(
+                            1,
+                            &format!("Missing required category '[{}]'", category),
+                            "Add the missing category with its required fields",
+                        );
+                        *CURRENT_CONFIG_ERROR.lock().unwrap() = Some(error);
+                        let mut default_config = Config::default();
+                        default_config.debug.disable_auto_focus = true;
+                        return default_config;
+                    }
                 }
-                Err(e) => {
-                    let line = e.span().map(|s| s.start).unwrap_or(0);
-                    let suggestion = match e.to_string() {
-                        s if s.contains("invalid type") => {
-                            "Check the type of this value matches what's expected in the config"
-                        }
-                        s if s.contains("missing field") => {
-                            "Add the missing field with an appropriate value"
-                        }
-                        _ => "Verify the syntax follows TOML format",
-                    };
-                    let error = ConfigError::new(line, &e.to_string(), suggestion);
-                    *CURRENT_CONFIG_ERROR.lock().unwrap() = Some(error);
-                    let mut default_config = Config::default();
-                    default_config.debug.disable_auto_focus = true;
-                    default_config
+
+                match toml::from_str::<Config>(&contents) {
+                    Ok(config) => {
+                        LOGGING_ENABLED.store(config.debug.enable_logging, Ordering::SeqCst);
+                        *CURRENT_CONFIG_ERROR.lock().unwrap() = None;
+                        config
+                    }
+                    Err(e) => {
+                        let line = e.span().map(|s| s.start).unwrap_or(0);
+                        let suggestion = match e.to_string() {
+                            s if s.contains("invalid type") => {
+                                "Check the type of this value matches what's expected in the config"
+                            }
+                            s if s.contains("missing field") => {
+                                "Add the missing field with an appropriate value"
+                            }
+                            _ => "Verify the syntax follows TOML format",
+                        };
+                        let error = ConfigError::new(line, &e.to_string(), suggestion);
+                        *CURRENT_CONFIG_ERROR.lock().unwrap() = Some(error);
+                        let mut default_config = Config::default();
+                        default_config.debug.disable_auto_focus = true;
+                        default_config
+                    }
                 }
-            },
+            }
             Err(e) => {
                 log!("Error reading config file: {}", e);
                 *CURRENT_CONFIG_ERROR.lock().unwrap() = None;
