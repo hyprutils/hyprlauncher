@@ -21,7 +21,7 @@ const BONUS_SCORE_BINARY: i64 = 3000;
 const BONUS_SCORE_KEYWORD_MATCH: i64 = 2500;
 const BONUS_SCORE_CATEGORY_MATCH: i64 = 2000;
 const BONUS_SCORE_WEB_SEARCH: i64 = -1000;
-const BONUS_SCORE_CALC: i64 = 1000;
+const BONUS_SCORE_CALC: i64 = 3000;
 const OPEN_WINDOW_PENALTY: i64 = -500;
 
 pub struct SearchResult {
@@ -75,7 +75,7 @@ pub async fn search_applications(
     let query = query.to_owned();
     let query_lower = query.to_lowercase();
     let max_results = config.window.max_entries;
-    let calculator_enabled = config.modes.calculator;
+    let calculator_enabled = config.calculator.enabled;
     let web_search_config = config.web_search.clone();
     let show_actions = config.window.show_actions;
 
@@ -223,17 +223,17 @@ pub async fn search_applications(
                 }
 
                 if results.is_empty()
+                    && calculator_enabled
+                    && query.trim().chars().next().unwrap().is_ascii_digit()
+                {
+                    results.push(create_calc_entry(&query));
+                }
+
+                if results.is_empty()
                     && web_search_config.enabled
                     && !should_exclude_web_search(&query)
                 {
                     results.push(create_web_search_entry(&query, &web_search_config));
-                }
-
-                if results.is_empty()
-                    && calculator_enabled
-                    && query.chars().next().unwrap().is_ascii_digit()
-                {
-                    results.push(create_calc_entry(&query));
                 }
 
                 results.sort_unstable_by_key(|item| -item.score);
@@ -266,6 +266,7 @@ pub async fn search_applications(
     rx.await
         .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Failed to receive results"))
 }
+
 #[inline(always)]
 fn calculate_bonus_score(app: &AppEntry) -> i64 {
     let mut score = 0;
@@ -476,7 +477,7 @@ fn create_calc_entry(query: &str) -> SearchResult {
             name: res.clone(),
             description: String::from("Copy to clipboard"),
             path: String::new(),
-            exec: format!("wl-copy -t text/plain \"{}\"", &res),
+            exec: format!("wl-copy -t text/plain \"{}\"", res),
             icon_name: String::from("calculator"),
             launch_count: 0,
             last_used: Some(now),

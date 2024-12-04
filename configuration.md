@@ -82,6 +82,9 @@ enabled = false                       # Enable/disable web search functionality
 engine = "duckduckgo"                 # Use preset engine name
 prefixes = []                         # Disables all custom search prefixes
 
+[calculator]
+enabled = false                       # Enable/disable calculator functionality
+
 [[web_search.prefixes]]
 prefix = "yt"
 url = "https://www.youtube.com/results?search_query="

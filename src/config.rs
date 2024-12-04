@@ -152,7 +152,7 @@ pub struct Config {
     pub window: Window,
     pub theme: Theme,
     pub debug: Debug,
-    pub modes: Modes,
+    pub calculator: Calculator,
     pub dmenu: Dmenu,
     pub web_search: WebSearch,
 }
@@ -242,8 +242,8 @@ impl Default for NavigateKeys {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
-pub struct Modes {
-    pub calculator: bool,
+pub struct Calculator {
+    pub enabled: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
