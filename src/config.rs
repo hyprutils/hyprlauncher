@@ -340,9 +340,20 @@ impl Config {
                 let required_categories = ["window", "theme", "debug", "dmenu", "web_search"];
                 let doc = match contents.parse::<toml::Table>() {
                     Ok(doc) => doc,
-                    Err(_) => {
+                    Err(e) => {
+                        let line = if let Some(line) = e
+                            .to_string()
+                            .split("line ")
+                            .nth(1)
+                            .and_then(|s| s.split(',').next())
+                            .and_then(|s| s.parse().ok())
+                        {
+                            line
+                        } else {
+                            1
+                        };
                         let error = ConfigError::new(
-                            1,
+                            line,
                             "Failed to parse config file",
                             "Verify the TOML syntax is correct",
                         );
@@ -374,7 +385,17 @@ impl Config {
                         config
                     }
                     Err(e) => {
-                        let line = e.span().map(|s| s.start).unwrap_or(0);
+                        let line = if let Some(line) = e
+                            .to_string()
+                            .split("line ")
+                            .nth(1)
+                            .and_then(|s| s.split(',').next())
+                            .and_then(|s| s.parse().ok())
+                        {
+                            line
+                        } else {
+                            1
+                        };
                         let suggestion = match e.to_string() {
                             s if s.contains("invalid type") => {
                                 "Check the type of this value matches what's expected in the config"
