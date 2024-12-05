@@ -203,7 +203,7 @@ When using custom CSS (style.css), you can also customize the error overlay appe
 
 ### Calculator Mode
 - Enables calculator functionality when starting your search with digits
-- Can also do more complex calculatios with diffrent units
+- Can also do more complex calculations with different units
 - For example `10 m/s to km/h`
 
 ### Dmenu Mode
