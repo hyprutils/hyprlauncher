@@ -703,35 +703,47 @@ impl Config {
                         if now.duration_since(last_update).as_millis() > 250 {
                             thread::sleep(Duration::from_millis(50));
 
-                            let config_changed = match fs::read_to_string(&config_path) {
-                                Ok(new_content) => {
-                                    if last_content.as_ref() != Some(&new_content) {
-                                        last_content = Some(new_content.clone());
-                                        match toml::from_str::<Config>(&new_content) {
-                                            Ok(_) => {
-                                                *CURRENT_CONFIG_ERROR.lock().unwrap() = None;
-                                                callback();
-                                                true
+                            let config_changed = if !config_path.exists() {
+                                log!("Config file deleted, regenerating default configuration");
+                                let default_config = Config::default();
+                                if let Ok(contents) = toml::to_string_pretty(&default_config) {
+                                    fs::write(&config_path, contents).unwrap_or_default();
+                                    last_content = None;
+                                    true
+                                } else {
+                                    false
+                                }
+                            } else {
+                                match fs::read_to_string(&config_path) {
+                                    Ok(new_content) => {
+                                        if last_content.as_ref() != Some(&new_content) {
+                                            last_content = Some(new_content.clone());
+                                            match toml::from_str::<Config>(&new_content) {
+                                                Ok(_) => {
+                                                    *CURRENT_CONFIG_ERROR.lock().unwrap() = None;
+                                                    true
+                                                }
+                                                Err(e) => {
+                                                    let line =
+                                                        e.span().map(|s| s.start).unwrap_or(0);
+                                                    let error = ConfigError::new(
+                                                        line,
+                                                        &e.to_string(),
+                                                        "Check your config syntax",
+                                                    );
+                                                    *CURRENT_CONFIG_ERROR.lock().unwrap() =
+                                                        Some(error);
+                                                    true
+                                                }
                                             }
-                                            Err(e) => {
-                                                let line = e.span().map(|s| s.start).unwrap_or(0);
-                                                let error = ConfigError::new(
-                                                    line,
-                                                    &e.to_string(),
-                                                    "Check your config syntax",
-                                                );
-                                                *CURRENT_CONFIG_ERROR.lock().unwrap() = Some(error);
-                                                callback();
-                                                true
-                                            }
+                                        } else {
+                                            false
                                         }
-                                    } else {
+                                    }
+                                    Err(e) => {
+                                        log!("Error reading config file: {}", e);
                                         false
                                     }
-                                }
-                                Err(e) => {
-                                    log!("Error reading config file: {}", e);
-                                    false
                                 }
                             };
 
