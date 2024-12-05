@@ -152,6 +152,7 @@ pub struct Config {
     pub window: Window,
     pub theme: Theme,
     pub debug: Debug,
+    pub calculator: Calculator,
     pub dmenu: Dmenu,
     pub web_search: WebSearch,
 }
@@ -238,6 +239,11 @@ impl Default for NavigateKeys {
             delete_word: String::from("h"),
         }
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
+pub struct Calculator {
+    pub enabled: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
@@ -337,7 +343,14 @@ impl Config {
 
         match fs::read_to_string(&config_file) {
             Ok(contents) => {
-                let required_categories = ["window", "theme", "debug", "dmenu", "web_search"];
+                let required_categories = [
+                    "window",
+                    "theme",
+                    "debug",
+                    "dmenu",
+                    "web_search",
+                    "calculator",
+                ];
                 let doc = match contents.parse::<toml::Table>() {
                     Ok(doc) => doc,
                     Err(e) => {

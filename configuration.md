@@ -8,6 +8,7 @@ Configuration file location: `~/.config/hyprlauncher/config.toml`
 ## Configuration file
 
 The configuration file controls the appearance and behavior of the launcher window.
+
 ```toml
 [window]
 width = 600                           # Width of the launcher window in pixels
@@ -81,6 +82,9 @@ enabled = false                       # Enable/disable web search functionality
 engine = "duckduckgo"                 # Use preset engine name
 prefixes = []                         # Disables all custom search prefixes
 
+[calculator]
+enabled = false                       # Enable/disable calculator functionality
+
 [[web_search.prefixes]]
 prefix = "yt"
 url = "https://www.youtube.com/results?search_query="
@@ -93,7 +97,9 @@ url = "https://github.com/search?q="
 ## Features
 
 ### Window Anchoring
+
 The `anchor` setting determines where the window appears on screen. Options are:
+
 - center: Window appears in the center of the screen
 - top: Window appears at the top of the screen
 - bottom: Window appears at the bottom of the screen
@@ -119,15 +125,19 @@ show_actions = true
 Actions will appear as separate entries with the format "Application Name - Action Name".
 
 ### Performance
+
 - `max_entries`: Limits the maximum number of entries shown in the list for better performance
 
 ### Navigation Keys
+
 Navigation can be customized using the `custom_navigate_keys` setting:
+
 - `up`: Key to move selection up (default: "CTRL + k")
 - `down`: Key to move selection down (default: "CTRL + j")
 - `delete_word`: Key to delete word in search (default: "CTRL + h")
 
 ### Search
+
 - The search bar is always focused
 - Escape exits the launcher
 - Supports fuzzy matching for application names
@@ -156,6 +166,7 @@ Example scoring bonuses (internal values):
 The heatmap data is automatically maintained and requires no manual configuration. The ranking system will begin adapting to your usage patterns as soon as you start launching applications.
 
 ### Visual Customization
+
 - Border customization with `border_width` - Window section, and `border` - Theme section
 - Corner radius customization for window, search bar, and list items
 - Option to use GTK theme colors with `use_gtk_colors`
@@ -186,8 +197,14 @@ When using custom CSS (style.css), you can also customize the error overlay appe
 ```
 
 ### Debug Options
+
 - `disable_auto_focus`: Prevents the window from automatically holding all input
 - `enable_logging`: Enables logging to the terminal window Hyprlauncher was launched from
+
+### Calculator Mode
+- Enables calculator functionality when starting your search with digits
+- Can also do more complex calculations with different units
+- For example `10 m/s to km/h`
 
 ### Dmenu Mode
 - Alternative mode that mimics dmenu functionality
@@ -247,18 +264,23 @@ prefixes = []  # Disables all custom search prefixes
 This configuration will only allow searching with the default search engine (DuckDuckGo) and disable any custom prefix-based searches.
 
 ## Hot Reloading
+
 The configuration file is watched for changes and will automatically reload when modified. No need to restart the application.
 
 > [!NOTE]
 > To interact and see your live config changes while the launcher is open, set `disable_auto_focus` to `true` in your config:
+
 > ```toml
 > [debug]
 > disable_auto_focus = true
 > ```
+
 > This allows you to edit the config file while the launcher window is open. Otherwise, the launcher's exclusive keyboard focus will prevent text editing in other windows.
 
 ## Default Paths
+
 Applications are searched in the following locations:
+
 - ~/.local/share/applications
 - /usr/share/applications
 - /usr/local/share/applications

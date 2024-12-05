@@ -4,6 +4,7 @@ use crate::{
 };
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+use rink_core::{one_line, simple_context};
 use std::{
     collections::HashMap,
     os::unix::fs::PermissionsExt,
@@ -21,6 +22,7 @@ const BONUS_SCORE_BINARY: i64 = 3000;
 const BONUS_SCORE_KEYWORD_MATCH: i64 = 2500;
 const BONUS_SCORE_CATEGORY_MATCH: i64 = 2000;
 const BONUS_SCORE_WEB_SEARCH: i64 = -1000;
+const BONUS_SCORE_CALC: i64 = 3000;
 const OPEN_WINDOW_PENALTY: i64 = -500;
 
 static SEARCH_GENERATION: AtomicU64 = AtomicU64::new(0);
@@ -76,6 +78,7 @@ pub async fn search_applications(
     let query = query.to_owned();
     let query_lower = query.to_lowercase();
     let max_results = config.window.max_entries;
+    let calculator_enabled = config.calculator.enabled;
     let web_search_config = config.web_search.clone();
     let show_actions = config.window.show_actions;
 
@@ -232,6 +235,13 @@ pub async fn search_applications(
                 }
 
                 if results.is_empty()
+                    && calculator_enabled
+                    && query.trim().chars().next().unwrap().is_ascii_digit()
+                {
+                    results.push(create_calc_entry(&query));
+                }
+
+                if results.is_empty()
                     && web_search_config.enabled
                     && !should_exclude_web_search(&query)
                 {
@@ -242,6 +252,7 @@ pub async fn search_applications(
                 if results.len() > max_results {
                     results.truncate(max_results);
                 }
+
                 results
             }
         };
@@ -260,6 +271,7 @@ pub async fn search_applications(
     rx.await
         .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Failed to receive results"))
 }
+
 #[inline(always)]
 fn calculate_bonus_score(app: &AppEntry) -> i64 {
     let mut score = 0;
@@ -455,4 +467,47 @@ fn load_history() -> HashMap<String, HistoryEntry> {
     }
 
     history
+}
+
+fn create_calc_entry(query: &str) -> SearchResult {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    let res = handle_calculation(query);
+
+    SearchResult {
+        app: AppEntry {
+            name: res.clone(),
+            description: String::from("Copy to clipboard"),
+            path: String::new(),
+            exec: format!("wl-copy -t text/plain \"{}\"", res),
+            icon_name: String::from("accessories-calculator"),
+            launch_count: 0,
+            last_used: Some(now),
+            entry_type: EntryType::Application,
+            score_boost: 0,
+            keywords: Vec::new(),
+            categories: vec![String::from("Calculation")],
+            terminal: false,
+            actions: Vec::new(),
+        },
+        score: BONUS_SCORE_CALC,
+    }
+}
+
+#[inline(always)]
+fn handle_calculation(query: &str) -> String {
+    let mut ctx = simple_context().unwrap();
+
+    let res = match one_line(&mut ctx, query) {
+        Ok(res) => res,
+        Err(_e) => "0".to_string(),
+    };
+
+    match res.find("(") {
+        Some(pos) => res[..pos - 1].to_string(),
+        None => res,
+    }
 }
