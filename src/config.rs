@@ -342,30 +342,75 @@ impl Config {
         }
 
         match fs::read_to_string(&config_file) {
-            Ok(contents) => match toml::from_str::<Config>(&contents) {
-                Ok(config) => {
-                    LOGGING_ENABLED.store(config.debug.enable_logging, Ordering::SeqCst);
-                    *CURRENT_CONFIG_ERROR.lock().unwrap() = None;
-                    config
+            Ok(contents) => {
+                let required_categories = ["window", "theme", "debug", "dmenu", "web_search"];
+                let doc = match contents.parse::<toml::Table>() {
+                    Ok(doc) => doc,
+                    Err(e) => {
+                        let line = e
+                            .to_string()
+                            .split("line ")
+                            .nth(1)
+                            .and_then(|s| s.split(',').next())
+                            .and_then(|s| s.parse().ok())
+                            .unwrap_or(1);
+                        let error = ConfigError::new(
+                            line,
+                            "Failed to parse config file",
+                            "Verify the TOML syntax is correct",
+                        );
+                        *CURRENT_CONFIG_ERROR.lock().unwrap() = Some(error);
+                        let mut default_config = Config::default();
+                        default_config.debug.disable_auto_focus = true;
+                        return default_config;
+                    }
+                };
+
+                for category in required_categories {
+                    if !doc.contains_key(category) {
+                        let error = ConfigError::new(
+                            1,
+                            &format!("Missing required category '[{}]'", category),
+                            "Add the missing category with its required fields",
+                        );
+                        *CURRENT_CONFIG_ERROR.lock().unwrap() = Some(error);
+                        let mut default_config = Config::default();
+                        default_config.debug.disable_auto_focus = true;
+                        return default_config;
+                    }
                 }
-                Err(e) => {
-                    let line = e.span().map(|s| s.start).unwrap_or(0);
-                    let suggestion = match e.to_string() {
-                        s if s.contains("invalid type") => {
-                            "Check the type of this value matches what's expected in the config"
-                        }
-                        s if s.contains("missing field") => {
-                            "Add the missing field with an appropriate value"
-                        }
-                        _ => "Verify the syntax follows TOML format",
-                    };
-                    let error = ConfigError::new(line, &e.to_string(), suggestion);
-                    *CURRENT_CONFIG_ERROR.lock().unwrap() = Some(error);
-                    let mut default_config = Config::default();
-                    default_config.debug.disable_auto_focus = true;
-                    default_config
+
+                match toml::from_str::<Config>(&contents) {
+                    Ok(config) => {
+                        LOGGING_ENABLED.store(config.debug.enable_logging, Ordering::SeqCst);
+                        *CURRENT_CONFIG_ERROR.lock().unwrap() = None;
+                        config
+                    }
+                    Err(e) => {
+                        let line = e
+                            .to_string()
+                            .split("line ")
+                            .nth(1)
+                            .and_then(|s| s.split(',').next())
+                            .and_then(|s| s.parse().ok())
+                            .unwrap_or(1);
+                        let suggestion = match e.to_string() {
+                            s if s.contains("invalid type") => {
+                                "Check the type of this value matches what's expected in the config"
+                            }
+                            s if s.contains("missing field") => {
+                                "Add the missing field with an appropriate value"
+                            }
+                            _ => "Verify the syntax follows TOML format",
+                        };
+                        let error = ConfigError::new(line, &e.to_string(), suggestion);
+                        *CURRENT_CONFIG_ERROR.lock().unwrap() = Some(error);
+                        let mut default_config = Config::default();
+                        default_config.debug.disable_auto_focus = true;
+                        default_config
+                    }
                 }
-            },
+            }
             Err(e) => {
                 log!("Error reading config file: {}", e);
                 *CURRENT_CONFIG_ERROR.lock().unwrap() = None;
@@ -664,35 +709,47 @@ impl Config {
                         if now.duration_since(last_update).as_millis() > 250 {
                             thread::sleep(Duration::from_millis(50));
 
-                            let config_changed = match fs::read_to_string(&config_path) {
-                                Ok(new_content) => {
-                                    if last_content.as_ref() != Some(&new_content) {
-                                        last_content = Some(new_content.clone());
-                                        match toml::from_str::<Config>(&new_content) {
-                                            Ok(_) => {
-                                                *CURRENT_CONFIG_ERROR.lock().unwrap() = None;
-                                                callback();
-                                                true
+                            let config_changed = if !config_path.exists() {
+                                log!("Config file deleted, regenerating default configuration");
+                                let default_config = Config::default();
+                                if let Ok(contents) = toml::to_string_pretty(&default_config) {
+                                    fs::write(&config_path, contents).unwrap_or_default();
+                                    last_content = None;
+                                    true
+                                } else {
+                                    false
+                                }
+                            } else {
+                                match fs::read_to_string(&config_path) {
+                                    Ok(new_content) => {
+                                        if last_content.as_ref() != Some(&new_content) {
+                                            last_content = Some(new_content.clone());
+                                            match toml::from_str::<Config>(&new_content) {
+                                                Ok(_) => {
+                                                    *CURRENT_CONFIG_ERROR.lock().unwrap() = None;
+                                                    true
+                                                }
+                                                Err(e) => {
+                                                    let line =
+                                                        e.span().map(|s| s.start).unwrap_or(0);
+                                                    let error = ConfigError::new(
+                                                        line,
+                                                        &e.to_string(),
+                                                        "Check your config syntax",
+                                                    );
+                                                    *CURRENT_CONFIG_ERROR.lock().unwrap() =
+                                                        Some(error);
+                                                    true
+                                                }
                                             }
-                                            Err(e) => {
-                                                let line = e.span().map(|s| s.start).unwrap_or(0);
-                                                let error = ConfigError::new(
-                                                    line,
-                                                    &e.to_string(),
-                                                    "Check your config syntax",
-                                                );
-                                                *CURRENT_CONFIG_ERROR.lock().unwrap() = Some(error);
-                                                callback();
-                                                true
-                                            }
+                                        } else {
+                                            false
                                         }
-                                    } else {
+                                    }
+                                    Err(e) => {
+                                        log!("Error reading config file: {}", e);
                                         false
                                     }
-                                }
-                                Err(e) => {
-                                    log!("Error reading config file: {}", e);
-                                    false
                                 }
                             };
 
