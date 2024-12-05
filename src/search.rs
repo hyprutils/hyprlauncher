@@ -7,6 +7,7 @@ use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use std::{
     collections::HashMap,
     os::unix::fs::PermissionsExt,
+    sync::atomic::{AtomicU64, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
 use tokio::sync::oneshot;
@@ -21,6 +22,8 @@ const BONUS_SCORE_KEYWORD_MATCH: i64 = 2500;
 const BONUS_SCORE_CATEGORY_MATCH: i64 = 2000;
 const BONUS_SCORE_WEB_SEARCH: i64 = -1000;
 const OPEN_WINDOW_PENALTY: i64 = -500;
+
+static SEARCH_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 pub struct SearchResult {
     pub app: AppEntry,
@@ -76,9 +79,19 @@ pub async fn search_applications(
     let web_search_config = config.web_search.clone();
     let show_actions = config.window.show_actions;
 
+    let current_gen = SEARCH_GENERATION.fetch_add(1, Ordering::SeqCst);
+
     tokio::task::spawn_blocking(move || {
         let cache = APP_CACHE.blocking_read();
-        let mut results = match query.chars().next() {
+
+        if SEARCH_GENERATION.load(Ordering::SeqCst) != current_gen + 1 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Search superseded",
+            ));
+        }
+
+        let results = match query.chars().next() {
             None => {
                 let history = load_history();
                 let mut heatmap_results = Vec::new();
@@ -233,18 +246,11 @@ pub async fn search_applications(
             }
         };
 
-        if web_search_config.enabled
-            && !query.is_empty()
-            && !should_exclude_web_search(&query)
-            && !results
-                .iter()
-                .any(|r| r.app.categories.contains(&String::from("Web Search")))
-        {
-            results.push(create_web_search_entry(&query, &web_search_config));
-            results.sort_unstable_by_key(|item| -item.score);
-            if results.len() > max_results {
-                results.truncate(max_results);
-            }
+        if SEARCH_GENERATION.load(Ordering::SeqCst) != current_gen + 1 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Search superseded",
+            ));
         }
 
         tx.send(results)
