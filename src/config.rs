@@ -343,7 +343,14 @@ impl Config {
 
         match fs::read_to_string(&config_file) {
             Ok(contents) => {
-                let required_categories = ["window", "theme", "debug", "dmenu", "web_search"];
+                let required_categories = [
+                    "window",
+                    "theme",
+                    "debug",
+                    "dmenu",
+                    "web_search",
+                    "calculator",
+                ];
                 let doc = match contents.parse::<toml::Table>() {
                     Ok(doc) => doc,
                     Err(e) => {
