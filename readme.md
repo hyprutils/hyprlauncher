@@ -25,7 +25,7 @@ bind = $mainMod_SHIFT, E, exec, hyprlauncher
 ## Configuration
 For configuration options and customization, see [configuration.md](configuration.md).
 
-The configuration file is located at `~/.config/hyprlauncher/config.json`
+The configuration file is located at `~/.config/hyprlauncher/config.toml`
 
 Changes to the configuration file are applied instantly without needing to restart.
 
