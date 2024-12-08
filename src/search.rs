@@ -248,10 +248,7 @@ pub async fn search_applications(
                     results.push(create_calc_entry(&query));
                 }
 
-                if results.is_empty()
-                    && web_search_config.enabled
-                    && !should_exclude_web_search(&query)
-                {
+                if web_search_config.enabled && !should_exclude_web_search(&query) {
                     results.push(create_web_search_entry(&query, &web_search_config));
                 }
 
