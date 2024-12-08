@@ -796,23 +796,25 @@ fn update_results_list(
             let max_entries = config.window.max_entries;
             let mut store = store.borrow_mut();
 
-            model.remove_all();
-            store.clear();
-            store.reserve(max_entries);
+            if !results.is_empty() {
+                model.remove_all();
+                store.clear();
+                store.reserve(max_entries);
 
-            let results = if results.len() > max_entries {
-                &results[..max_entries]
-            } else {
-                &results
-            };
+                let results = if results.len() > max_entries {
+                    &results[..max_entries]
+                } else {
+                    &results
+                };
 
-            store.extend(results.iter().map(|r| r.app.clone()));
-            model.extend_from_slice(
-                &results
-                    .iter()
-                    .map(|r| AppEntryObject::new(r.app.clone()))
-                    .collect::<Vec<_>>(),
-            );
+                store.extend(results.iter().map(|r| r.app.clone()));
+                model.extend_from_slice(
+                    &results
+                        .iter()
+                        .map(|r| AppEntryObject::new(r.app.clone()))
+                        .collect::<Vec<_>>(),
+                );
+            }
         }
     }
 }

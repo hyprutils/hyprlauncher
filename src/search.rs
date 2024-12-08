@@ -88,10 +88,7 @@ pub async fn search_applications(
         let cache = APP_CACHE.blocking_read();
 
         if SEARCH_GENERATION.load(Ordering::SeqCst) != current_gen + 1 {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Search superseded",
-            ));
+            return Ok::<Vec<SearchResult>, std::io::Error>(Vec::new());
         }
 
         let results = match query.chars().next() {
@@ -262,18 +259,15 @@ pub async fn search_applications(
         };
 
         if SEARCH_GENERATION.load(Ordering::SeqCst) != current_gen + 1 {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Search superseded",
-            ));
+            return Ok::<Vec<SearchResult>, std::io::Error>(Vec::new());
         }
 
-        tx.send(results)
-            .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Failed to send results"))
+        tx.send(results).ok();
+        Ok::<Vec<SearchResult>, std::io::Error>(Vec::new())
     });
 
     rx.await
-        .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Failed to receive results"))
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Search cancelled"))
 }
 
 #[inline(always)]
