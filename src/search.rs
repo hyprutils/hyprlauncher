@@ -125,7 +125,7 @@ pub async fn search_applications(
                 results
             }
             Some(_) => {
-                let matcher = SkimMatcherV2::default();
+                let matcher = SkimMatcherV2::default().smart_case();
                 let mut results = Vec::with_capacity(max_results);
                 let mut seen_names = std::collections::HashSet::new();
 
@@ -134,7 +134,7 @@ pub async fn search_applications(
                     let name_key = name_lower.clone();
                     let mut added = false;
 
-                    if name_lower.eq_ignore_ascii_case(&query_lower) {
+                    if app.name.contains(&query) || name_lower.contains(&query_lower) {
                         results.push(SearchResult {
                             app: app.clone(),
                             score: BONUS_SCORE_BINARY + calculate_bonus_score(app),
@@ -143,7 +143,12 @@ pub async fn search_applications(
                         added = true;
                     }
 
-                    if app.keywords.iter().any(|k| k.eq_ignore_ascii_case(&query)) && !added {
+                    if app
+                        .keywords
+                        .iter()
+                        .any(|k| k.contains(&query) || k.to_lowercase().contains(&query_lower))
+                        && !added
+                    {
                         results.push(SearchResult {
                             app: app.clone(),
                             score: BONUS_SCORE_KEYWORD_MATCH + calculate_bonus_score(app),
@@ -155,7 +160,7 @@ pub async fn search_applications(
                     if app
                         .categories
                         .iter()
-                        .any(|c| c.eq_ignore_ascii_case(&query))
+                        .any(|c| c.contains(&query) || c.to_lowercase().contains(&query_lower))
                         && !added
                     {
                         results.push(SearchResult {
@@ -166,14 +171,16 @@ pub async fn search_applications(
                         added = true;
                     }
 
-                    if let Some(score) = matcher.fuzzy_match(&name_lower, &query) {
+                    if let Some(score) = matcher
+                        .fuzzy_match(&app.name, &query)
+                        .or_else(|| matcher.fuzzy_match(&name_lower, &query_lower))
+                    {
                         if !added {
                             results.push(SearchResult {
                                 app: app.clone(),
                                 score: score + calculate_bonus_score(app),
                             });
                             seen_names.insert(name_key.clone());
-                            added = true;
                         }
                     }
 
