@@ -239,7 +239,6 @@ fn parse_desktop_entry(path: &std::path::Path) -> Option<AppEntry> {
         .or_else(|| get_localized("GenericName"))
         .unwrap_or_default();
 
-
     let keywords = section
         .attr("Keywords")
         .map(|k| {
