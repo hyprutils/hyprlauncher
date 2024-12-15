@@ -210,8 +210,23 @@ fn parse_desktop_entry(path: &std::path::Path) -> Option<AppEntry> {
         }
     }
 
-    let name = String::from(section.attr("Name")?);
-    let raw_exec = String::from(section.attr("Exec").unwrap_or_default());
+    let lang = std::env::var("LC_ALL")
+        .or_else(|_| std::env::var("LC_MESSAGES"))
+        .or_else(|_| std::env::var("LANG"))
+        .unwrap_or_default();
+    let lang = lang.split('.').next().unwrap_or_default();
+
+    let get_localized = |base_key: &str| -> Option<String> {
+		if section.has_attr_with_param(base_key,lang) {
+        	section.attr_with_param(base_key,lang).map(String::from)
+       	} else {
+	        // fall back
+	        section.attr(base_key).map(String::from)
+	    }
+    };
+
+    let name = get_localized("Name")?;
+    let raw_exec = get_localized("Exec").unwrap_or_default();
 
     let exec = raw_exec
         .split_whitespace()
@@ -220,12 +235,11 @@ fn parse_desktop_entry(path: &std::path::Path) -> Option<AppEntry> {
         .join(" ");
 
     let icon = String::from(section.attr("Icon").unwrap_or("application-x-executable"));
-    let desc = String::from(
-        section
-            .attr("Comment")
-            .or_else(|| section.attr("GenericName"))
-            .unwrap_or(""),
-    );
+
+    let desc = get_localized("Comment")
+        .or_else(|| get_localized("GenericName"))
+        .unwrap_or_default();
+
 
     let keywords = section
         .attr("Keywords")
